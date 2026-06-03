@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Mario AI run result",
+  "type": "object",
+  "required": ["run_id", "schema_version", "kind", "milestone", "git_rev",
+    "env_fingerprint", "level", "seed", "outcome", "artifacts", "pass", "pass_reason"],
+  "additionalProperties": true,
+  "properties": {
+    "run_id": {"type": "string"},
+    "schema_version": {"type": "integer", "const": 1},
+    "kind": {"type": "string", "enum": ["search", "rollout", "eval"]},
+    "milestone": {"type": "string"},
+    "git_rev": {"type": "string"},
+    "env_fingerprint": {"type": "object"},
+    "level": {
+      "type": "object",
+      "required": ["world", "stage"],
+      "properties": {"world": {"type": "integer"}, "stage": {"type": "integer"}}
+    },
+    "seed": {"type": "integer"},
+    "outcome": {
+      "type": "object",
+      "required": ["beat_level", "death", "death_cause", "x_pos_reached", "x_pos_max",
+        "level_length", "completion_frac", "frames", "framerule_time", "deaths"],
+      "additionalProperties": true,
+      "properties": {
+        "beat_level": {"type": "boolean"},
+        "death": {"type": "boolean"},
+        "death_cause": {"type": ["string", "null"]},
+        "x_pos_reached": {"type": "integer"},
+        "x_pos_max": {"type": "integer"},
+        "level_length": {"type": "integer"},
+        "completion_frac": {"type": "number", "minimum": 0, "maximum": 1.0},
+        "frames": {"type": "integer", "minimum": 0},
+        "framerule_time": {"type": "integer", "minimum": 0},
+        "deaths": {"type": "integer", "minimum": 0}
+      }
+    },
+    "search": {
+      "type": "object",
+      "properties": {
+        "beam_width": {"type": "integer"},
+        "max_depth": {"type": "integer"},
+        "chunk_frames": {"type": "integer"},
+        "nodes_expanded": {"type": "integer"},
+        "wall_clock_s": {"type": "number"},
+        "nodes_per_s": {"type": "number"},
+        "reward_weights": {"type": "object"}
+      }
+    },
+    "artifacts": {"type": "object"},
+    "pass": {"type": "boolean"},
+    "pass_reason": {"type": "string"}
+  }
+}

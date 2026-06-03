@@ -1,0 +1,16 @@
+{
+  "generated_at": "2026-06-03T16:47:15Z",
+  "env": {
+    "python": "3.13.13",
+    "platform": "darwin-arm64",
+    "gym-super-mario-bros": "8.0.0",
+    "nes-py": "9.0.0",
+    "gymnasium": "1.3.0",
+    "numpy": "2.4.6",
+    "torch": "2.12.0"
+  },
+  "n_frames": 20000,
+  "wall_clock_s": 14.5376,
+  "fps": 1375.7,
+  "us_per_frame": 726.88
+}

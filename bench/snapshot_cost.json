@@ -1,0 +1,22 @@
+{
+  "generated_at": "2026-06-03T16:47:15Z",
+  "env": {
+    "python": "3.13.13",
+    "platform": "darwin-arm64",
+    "gym-super-mario-bros": "8.0.0",
+    "nes-py": "9.0.0",
+    "gymnasium": "1.3.0",
+    "numpy": "2.4.6",
+    "torch": "2.12.0"
+  },
+  "n": 5000,
+  "dump_us": 62.106,
+  "load_us": 10.97,
+  "roundtrip_us": 73.076,
+  "search_node": {
+    "chunk_frames": 4,
+    "n_nodes": 5000,
+    "us_per_node": 2968.65,
+    "nodes_per_s": 336.9
+  }
+}
