@@ -1,0 +1,13 @@
+{
+  "level": "1-1",
+  "seed": 0,
+  "n_actions": 200,
+  "checkpoints": {
+    "0": "7633d10d64e4f954fda37b2ba822ecb9b4cdb7392707ed5b9891fe1b6cb77196",
+    "50": "92cdcacd14e67c52d1c098550aa264d7a648d3d5e2951dc22263922c4cd11835",
+    "100": "99bd29ddfe687f3d103b303db90a43dc85c1c89643f1b614c6b0a6e4f7331e6f"
+  },
+  "final": "85432504d20730d7c821eb96395c42c0d9a223856489c6948a30cede34fb833e",
+  "done_at": 116,
+  "done": true
+}

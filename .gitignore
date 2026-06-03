@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Virtual env (native arm64, recreate with: uv venv --python 3.13 venv)
+venv/
+.venv/
+
+# Generated artifacts — ground truth, regenerable; not source
+data/
+runs/
+*.pt
+
+# OS
+.DS_Store

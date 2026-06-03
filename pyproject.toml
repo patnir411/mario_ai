@@ -1,0 +1,30 @@
+[project]
+name = "mario_ai"
+version = "0.1.0"
+description = "Local AI that plays/beats/speedruns Super Mario Bros (NES) via forward-model search + distillation + DAgger"
+requires-python = ">=3.13"
+dependencies = [
+    "gym-super-mario-bros==8.0.0",
+    "nes-py==9.0.0",
+    "gymnasium>=1.0.0",
+    "numpy>=2.0",
+    "torch>=2.4",
+    "pillow>=10",
+    "imageio>=2.30",
+    "jsonschema>=4.20",
+    "tqdm>=4.60",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+markers = [
+    "mps: tests that touch the torch MPS backend (tolerance-based, never bit-exact)",
+]
+
+# Native arm64 interpreter required (M2 Pro). Created with:
+#   uv venv --python 3.13 venv   (uv-provided cpython-3.13-macos-aarch64)
+# The /usr/local python3.13 is x86_64/Rosetta and disables torch MPS — do NOT use it.
