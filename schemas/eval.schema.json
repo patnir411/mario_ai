@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Mario AI policy eval result",
+  "type": "object",
+  "required": ["run_id", "schema_version", "kind", "milestone", "git_rev",
+    "env_fingerprint", "policy", "levels", "aggregate", "pass", "pass_reason"],
+  "additionalProperties": true,
+  "properties": {
+    "run_id": {"type": "string"},
+    "schema_version": {"type": "integer", "const": 1},
+    "kind": {"type": "string", "const": "eval"},
+    "milestone": {"type": "string"},
+    "git_rev": {"type": "string"},
+    "env_fingerprint": {"type": "object"},
+    "policy": {
+      "type": "object",
+      "required": ["checkpoint_run_id", "K", "chunk_frames"],
+      "properties": {
+        "checkpoint_run_id": {"type": "string"},
+        "K": {"type": "integer"},
+        "chunk_frames": {"type": "integer"}
+      }
+    },
+    "levels": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["completion_rate", "n_beat", "n_rollouts",
+          "median_framerule_time", "median_completion_frac", "deaths_by_cause"],
+        "properties": {
+          "completion_rate": {"type": "number", "minimum": 0, "maximum": 1.0},
+          "n_beat": {"type": "integer", "minimum": 0},
+          "n_rollouts": {"type": "integer", "minimum": 1},
+          "median_framerule_time": {"type": ["integer", "null"]},
+          "median_completion_frac": {"type": "number", "minimum": 0, "maximum": 1.0},
+          "deaths_by_cause": {"type": "object"}
+        }
+      }
+    },
+    "aggregate": {
+      "type": "object",
+      "required": ["mean_completion_rate", "total_beat", "total_rollouts"],
+      "properties": {
+        "mean_completion_rate": {"type": "number"},
+        "total_beat": {"type": "integer"},
+        "total_rollouts": {"type": "integer"}
+      }
+    },
+    "mps_parity": {"type": "object"},
+    "artifacts": {"type": "object"},
+    "pass": {"type": "boolean"},
+    "pass_reason": {"type": "string"}
+  }
+}

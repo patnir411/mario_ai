@@ -57,7 +57,8 @@ def main() -> int:
 
     print("== STEP 1: layer invariants ==")
     code1, p1, f1, out1 = _pytest(["tests/test_reward.py", "tests/test_artifacts_schema.py",
-                                   "tests/test_observation.py"])
+                                   "tests/test_observation.py", "tests/test_label.py",
+                                   "tests/test_buffer.py", "tests/test_eval_schema.py"])
     print(out1.strip().splitlines()[-1] if out1.strip() else "")
 
     total_pass, total_fail = p0 + p1, f0 + f1

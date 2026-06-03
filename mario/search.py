@@ -54,9 +54,20 @@ def _dedup_key(info: dict, bucket: int = 16) -> tuple:
 def beam_search(world: int = 1, stage: int = 1, *, beam_width: int = 40,
                 chunk_frames: int = 8, max_depth: int = 400,
                 weights: RewardWeights = DEFAULT, seed: int = 0,
-                stuck_cap: int = 12, progress_every: int = 0) -> SearchResult:
+                stuck_cap: int = 12, progress_every: int = 0,
+                start_prefix: list[int] | None = None) -> SearchResult:
+    """Beam search to beat a level. With `start_prefix`, replay those chunks after reset
+    and search the CONTINUATION from there (used for recovery trajectories in DAgger-lite
+    dataset generation). The returned `path` is the continuation only; progress/x_start
+    are measured from the post-prefix state."""
     sim = MarioSim(world, stage)
-    root_info = sim.reset(seed=seed)
+    sim.reset(seed=seed)
+    if start_prefix:
+        for a in start_prefix:
+            _info, done = sim.run_chunk(a, chunk_frames)
+            if done:
+                break
+    root_info = sim.last_info
     x_start = int(root_info.get("x_pos", 0))
     beam = [Node(sim.snapshot(), 0.0, root_info, [], x_start, 0, 0)]
 

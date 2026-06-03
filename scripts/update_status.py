@@ -37,6 +37,16 @@ def _load_results() -> list[dict]:
     return out
 
 
+def _load_evals() -> list[dict]:
+    out = []
+    for p in sorted(RUNS.glob("*/eval.json")):
+        try:
+            out.append(json.loads(p.read_text()))
+        except Exception as e:
+            print(f"WARN: skipping malformed {p}: {e}", file=sys.stderr)
+    return out
+
+
 def _load_bench() -> dict:
     b = {}
     sr = ROOT / "bench" / "step_rate.json"
@@ -50,7 +60,8 @@ def _load_bench() -> dict:
     return b
 
 
-def build_status(results: list[dict]) -> dict:
+def build_status(results: list[dict], evals: list[dict] | None = None) -> dict:
+    evals = evals or []
     milestones = {m: {"status": "todo"} for m in MILESTONES}
     for r in results:
         m = r.get("milestone")
@@ -64,6 +75,34 @@ def build_status(results: list[dict]) -> dict:
                                   ("beat_level", "framerule_time", "deaths", "completion_frac")})
         elif entry["status"] == "todo":
             entry["status"] = "in_progress"
+
+    # V1 (dataset) is tracked by data/manifest.json, not a result.json
+    man = ROOT / "data" / "manifest.json"
+    if man.exists():
+        try:
+            mlv = json.loads(man.read_text()).get("levels", {})
+            n = sum(v.get("n_samples", 0) for v in mlv.values())
+            beaten = sum(1 for v in mlv.values() if v.get("has_beaten_trajectory"))
+            if beaten > 0:
+                milestones["V1"].update(
+                    status="done", best_run="data/manifest.json",
+                    metrics={"n_samples": n, "levels_beaten": beaten})
+        except Exception as e:
+            print(f"WARN: manifest read failed: {e}", file=sys.stderr)
+
+    # eval.json drives V2+ milestone status (policy results, not search)
+    for ev in evals:
+        m = ev.get("milestone")
+        if m not in milestones:
+            continue
+        entry = milestones[m]
+        cr = ev.get("levels", {}).get("1-1", {}).get("completion_rate")
+        if ev.get("pass"):
+            entry.update(status="done", best_run=ev["run_id"],
+                         metrics={"completion_rate": cr})
+        elif entry["status"] != "done":
+            entry.update(status="in_progress", best_run=ev["run_id"],
+                         metrics={"completion_rate": cr})
 
     # current best per level: prefer beaten with lowest framerule_time, else highest completion
     best: dict[str, dict] = {}
@@ -82,6 +121,14 @@ def build_status(results: list[dict]) -> dict:
             best[lvl] = cand
         elif not cur["beat"] and cand["completion_frac"] > cur["completion_frac"]:
             best[lvl] = cand
+
+    # policy evals augment current_best with a learned-policy completion_rate per level
+    for ev in evals:
+        for lvl, lv in ev.get("levels", {}).items():
+            entry = best.setdefault(lvl, {})
+            entry["policy_completion_rate"] = lv.get("completion_rate")
+            entry["policy_framerule"] = lv.get("median_framerule_time")
+            entry["policy_run"] = ev["run_id"]
 
     tests_path = RUNS / "tests.json"
     tests = json.loads(tests_path.read_text()) if tests_path.exists() else {}
@@ -104,8 +151,12 @@ def render_block(status: dict) -> str:
     for m in MILESTONES:
         e = status["milestones"][m]
         metric = "—"
-        if e.get("metrics"):
-            mt = e["metrics"]
+        mt = e.get("metrics")
+        if mt and "n_samples" in mt:
+            metric = f"n_samples={mt.get('n_samples')}, levels_beaten={mt.get('levels_beaten')}"
+        elif mt and "completion_rate" in mt:
+            metric = f"completion_rate={mt.get('completion_rate')} ({e.get('best_run','')})"
+        elif mt:
             metric = (f"beat={mt.get('beat_level')}, framerule={mt.get('framerule_time')}, "
                       f"deaths={mt.get('deaths')} ({e.get('best_run','')})")
         lines.append(f"| {labels[m]} | {e['status'].upper()} | {metric} |")
@@ -140,7 +191,8 @@ def drift_check(prose: str, status: dict) -> list[str]:
 
 def main() -> int:
     results = _load_results()
-    status = build_status(results)
+    evals = _load_evals()
+    status = build_status(results, evals)
 
     prev = RUNS / "status.json"
     if prev.exists():
