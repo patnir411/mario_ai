@@ -14,11 +14,17 @@ import numpy as np
 
 from mario import ram as R
 
-# tile codes in the ego grid
+# tile codes in the ego grid (MARIO marks the center cell of the grid)
 EMPTY = 0
 SOLID = 1
 ENEMY = 2
 MARIO = 3
+HAZARD = 4   # projectiles/firebars/hammers/Bowser-fire — its own one-hot channel
+N_CHANNELS = 5
+
+# Levels whose physics is swimming (no gravity-fall → no pit). Used to gate the
+# pit sensor and set the is_water scalar so one net can separate water from land.
+UNDERWATER = {(2, 2), (7, 2)}
 
 TILE_BASE = 0x0500
 PAGE_BYTES = 208          # 13 rows * 16 cols
@@ -108,11 +114,17 @@ def gap_ahead(grid: np.ndarray) -> float:
     return 1.0
 
 
+def is_water_level(info: dict) -> bool:
+    return (int(info.get("world", 0)), int(info.get("stage", 0))) in UNDERWATER
+
+
 def scalar_features(ram, info: dict, grid: np.ndarray | None = None) -> np.ndarray:
-    """Velocity / state scalars + sub-tile position + pit sensor (all relative/normalized).
+    """Velocity / state scalars + sub-tile position + pit sensor + water flag.
 
     sub-tile x and gap_ahead are what let the policy TIME a jump — within a 16px tile the
     ego grid is identical, so without these 'jump now' vs 'wait' are indistinguishable.
+    is_water lets one net separate swimming from running; underwater the pit sensor is
+    meaningless (no floor to fall off) so it's gated to 1.0.
     """
     if grid is None:
         grid = tile_grid(ram)
@@ -122,26 +134,44 @@ def scalar_features(ram, info: dict, grid: np.ndarray | None = None) -> np.ndarr
     float_state = int(ram[R.PLAYER_FLOAT_STATE])
     on_ground = 1.0 if float_state == 0 else 0.0
     x_subtile = (mario_level_x(ram) % 16) / 16.0
+    water = is_water_level(info)
     return np.array([
         vx / 40.0, vy / 40.0,
         min(powerup, 2) / 2.0,
         on_ground,
         1.0 if float_state == 1 else 0.0,  # jumping
         x_subtile,                          # sub-tile horizontal phase (jump timing)
-        gap_ahead(grid),                    # distance to the next pit ahead
+        1.0 if water else gap_ahead(grid),  # pit distance (gated off underwater)
+        1.0 if water else 0.0,              # is_water
     ], dtype=np.float32)
 
 
-N_SCALARS = 7
+N_SCALARS = 8
+
+
+def _hazard_cells(ram, mario_col: int, mario_row: int):
+    """Ego-grid cells occupied by projectiles/firebars/hammers/Bowser-fire.
+
+    Placeholder: 1-1..1-3 have no such hazards (Goombas/Koopas are ENEMY, not HAZARD), so
+    this returns nothing for them. Populated + visually verified on 1-4 (first firebars)
+    before castle levels rely on it. The 5th channel exists now so OBS_DIM is locked and
+    World-1 datasets don't need re-generation when hazard reading is calibrated.
+    """
+    return ()  # TODO(1-4): read firebar/hammer/fireball RAM, classify into the grid
 
 
 def observe(ram, info: dict) -> np.ndarray:
-    """Flat observation vector = one-hot tile grid + scalars. Used by the policy."""
+    """Flat observation vector = 5-channel one-hot tile grid + scalars. Used by the policy."""
     grid = tile_grid(ram)
-    onehot = np.zeros((4, GRID_H, GRID_W), dtype=np.float32)
+    onehot = np.zeros((N_CHANNELS, GRID_H, GRID_W), dtype=np.float32)
     for code in (EMPTY, SOLID, ENEMY, MARIO):
         onehot[code] = (grid == code)
+    mario_col = mario_level_x(ram) // 16
+    mario_row = (mario_screen_y(ram) - HUD_Y_OFFSET) // 16 + MARIO_ROW_ADJUST
+    for gy, gx in _hazard_cells(ram, mario_col, mario_row):
+        if 0 <= gy < GRID_H and 0 <= gx < GRID_W:
+            onehot[HAZARD, gy, gx] = 1.0
     return np.concatenate([onehot.reshape(-1), scalar_features(ram, info, grid)])
 
 
-OBS_DIM = 4 * GRID_H * GRID_W + N_SCALARS
+OBS_DIM = N_CHANNELS * GRID_H * GRID_W + N_SCALARS

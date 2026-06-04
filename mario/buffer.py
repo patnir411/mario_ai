@@ -12,6 +12,7 @@ from pathlib import Path
 
 import numpy as np
 
+from mario.env import N_ACTIONS
 from mario.observation import OBS_DIM
 
 # row fields and dtypes (the dataset contract)
@@ -26,7 +27,6 @@ FIELDS = {
     "prefix_len": np.int16,     # [N]   chunks from reset (ordering within a trajectory)
     "trajectory_id": np.int32,  # [N]   K-stacks never cross this boundary
 }
-N_ACTIONS = 7
 
 
 def encode_level_id(world: int, stage: int) -> int:
@@ -60,6 +60,12 @@ class DatasetIndex:
         for lvl in self.manifest["levels"].values():
             shards.extend(lvl["shards"])
         parts = [read_shard(self.root / s) for s in shards]
+        for s, p in zip(shards, parts):
+            assert p["obs"].shape[1] == OBS_DIM, (
+                f"shard {s} obs width {p['obs'].shape[1]} != OBS_DIM {OBS_DIM} — "
+                f"stale dataset; regenerate after obs/action changes")
+            assert p["soft_targets"].shape[1] == N_ACTIONS, (
+                f"shard {s} soft width {p['soft_targets'].shape[1]} != N_ACTIONS {N_ACTIONS}")
         self.data = {k: np.concatenate([p[k] for p in parts]) for k in FIELDS}
         self._build_stacks()
         self._build_weights()

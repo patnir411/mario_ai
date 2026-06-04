@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from mario.env import MarioSim
+from mario.env import MarioSim, N_ACTIONS
 from mario.label import label_state, soft_entropy
 
 
@@ -28,12 +28,12 @@ def _chunks_until_death(action=3, chunk_frames=8, cap=60):
 
 def test_soft_targets_well_formed():
     r = label_state(1, 1, [], depth=4, beam_width=4)
-    assert r.soft_targets.shape == (7,)
+    assert r.soft_targets.shape == (N_ACTIONS,)
     assert abs(float(r.soft_targets.sum()) - 1.0) < 1e-5
     assert np.all(r.soft_targets >= 0)
     assert np.isfinite(r.value)
-    assert 0 <= r.best_action < 7
-    assert r.reachable.shape == (7,) and r.reachable.dtype == bool
+    assert 0 <= r.best_action < N_ACTIONS
+    assert r.reachable.shape == (N_ACTIONS,) and r.reachable.dtype == bool
 
 
 def test_fatal_action_is_suppressed_at_hazard():

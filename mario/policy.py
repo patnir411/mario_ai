@@ -12,9 +12,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+from mario.env import N_ACTIONS  # single source of truth (curated 9-action set)
 from mario.observation import OBS_DIM, observe
-
-N_ACTIONS = 7
 
 
 class MarioPolicy(nn.Module):
@@ -57,9 +56,10 @@ def load_policy(path, device="cpu"):
 
 
 # Inference bias: under uncertainty (near-uniform logits) plain argmax ties to index 0
-# (NOOP) and the policy stalls/times out. A mild bias against NOOP/left makes the
-# controller prefer forward motion when it's unsure, without overriding confident NOOPs.
-ACTION_BIAS = np.array([-0.6, 0, 0, 0, 0, 0, -1.0], dtype=np.float32)  # NOOP, .., left
+# (NOOP) and the policy stalls/times out. A mild bias against NOOP/left/down/up makes
+# the controller prefer forward motion when unsure, without overriding confident choices.
+# Order: NOOP, right, right+A, right+B, right+A+B, A, left, down, up
+ACTION_BIAS = np.array([-0.6, 0, 0, 0, 0, 0, -1.0, -0.8, -0.8], dtype=np.float32)
 
 
 class Controller:
@@ -92,8 +92,13 @@ class Controller:
         return int(torch.argmax(logits).item())
 
     def act_with_entropy(self, ram, info):
-        """Return (action, entropy, value) — used by DAgger to flag uncertain states."""
+        """Return (action, entropy, value) — used by DAgger to flag uncertain states.
+
+        MUST apply the same action_bias as act() so DAgger collects the policy's REAL
+        induced trajectory (otherwise it explores a different, biased-vs-unbiased policy
+        and can miss the actual failure states)."""
         logits, value = self._logits(ram, info)
-        p = torch.softmax(logits, dim=-1)
+        biased = logits + self.action_bias if self.action_bias is not None else logits
+        p = torch.softmax(logits, dim=-1)  # entropy from the raw (unbiased) distribution
         entropy = float(-(p * torch.log(p + 1e-9)).sum().item())
-        return int(torch.argmax(logits).item()), entropy, value
+        return int(torch.argmax(biased).item()), entropy, value

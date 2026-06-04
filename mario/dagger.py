@@ -15,6 +15,8 @@ import os
 
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 
+import numpy as np
+
 from mario.env import MarioSim
 from mario.label import fast_label, soft_entropy
 from mario.policy import Controller, load_policy
@@ -22,7 +24,7 @@ from mario.reward import is_death, is_success
 from mario.search import beam_search
 
 PREDEATH_OFFSETS = [4, 8, 12, 16]  # anchor at several points before a death (dense coverage)
-ENTROPY_FLAG = 1.4    # also flag uncertain states (nats; ln7=1.95)
+ENTROPY_FLAG = 1.6    # also flag uncertain states (nats; ln9=2.20)
 RECOVER_BEAM = 24
 RECOVER_DEPTH = 60
 ANCHOR_BUCKET = 12    # dedup anchors by this x-bucket so seeds don't pile up duplicates
@@ -63,9 +65,16 @@ def collect_failures(checkpoint, world, stage, seeds, max_chunks=400):
             xb = (x_log[anchor_len] if anchor_len < len(x_log) else x_log[-1]) // ANCHOR_BUCKET
             anchors.setdefault(xb, prefix[:anchor_len])
 
+        beat = is_success(info)
         if died:
             for off in PREDEATH_OFFSETS:
                 _add(len(prefix) - off)
+        elif not beat:
+            # timed out / stalled without dying: anchor around where forward progress
+            # peaked (the stall point) so DAgger still gets a correction there.
+            peak = int(np.argmax(x_log)) if x_log else len(prefix)
+            for off in (0, 4, 8):
+                _add(peak - off)
         for i, e in enumerate(ent_log):
             if e > ENTROPY_FLAG:
                 _add(max(0, i - 2))

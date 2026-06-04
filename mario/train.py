@@ -22,11 +22,12 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from mario.buffer import DatasetIndex
+from mario.env import N_ACTIONS
 from mario.io import new_run_id, run_dir, write_json_atomic
 from mario.policy import MarioPolicy, save_checkpoint
 
 VALUE_SCALE = 10000.0
-LN7 = float(np.log(7))
+LN_A = float(np.log(N_ACTIONS))  # entropy normalizer for the current action set
 DAGGER_WEIGHT = 4.0   # up-weight DAgger correction states (source==2) so they actually move the policy
 
 
@@ -57,7 +58,7 @@ def _loss(net, batch, device):
     # hazards. Weight each sample's soft-KL by how INFORMATIVE it is: w = 1 - H(soft)/ln7,
     # so near-uniform soft contributes ~0 and sharp (hazard) soft contributes fully.
     H = -(soft * torch.log(soft + 1e-9)).sum(1)
-    info_w = (1.0 - H / LN7).clamp(min=0.0)
+    info_w = (1.0 - H / LN_A).clamp(min=0.0)
     soft_ce = (-(soft * F.log_softmax(logits, dim=1)).sum(1) * info_w).mean()
     vloss = F.mse_loss(value_pred, value / VALUE_SCALE)
     return ce + 0.3 * soft_ce + 0.3 * vloss, ce, soft_ce, vloss

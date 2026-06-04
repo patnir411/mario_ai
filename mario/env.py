@@ -20,10 +20,13 @@ import gym_super_mario_bros
 from gym_super_mario_bros.actions import SIMPLE_MOVEMENT
 from nes_py.wrappers import JoypadSpace
 
-# Canonical action set for the whole project (7 discrete actions).
-# Index meaning (gym_super_mario_bros SIMPLE_MOVEMENT):
-#   0 NOOP, 1 right, 2 right+A, 3 right+B, 4 right+A+B, 5 A, 6 left
-ACTIONS = SIMPLE_MOVEMENT
+# Canonical action set for the whole project (curated 9 — SIMPLE_MOVEMENT + down/up).
+# Index meaning:
+#   0 NOOP, 1 right, 2 right+A, 3 right+B, 4 right+A+B, 5 A, 6 left, 7 down, 8 up
+# down: enter down-pipes/warps, crouch under firebars/Bowser. up: climb vines (1-2/4-2
+# warps). The 3 left+jump combos are excluded globally to keep search branching low;
+# levels that need them (8-4 maze) pass a wider `actions=` override.
+ACTIONS = SIMPLE_MOVEMENT + [["down"], ["up"]]
 N_ACTIONS = len(ACTIONS)
 
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 import numpy as np
 
 from mario.buffer import FIELDS, DatasetIndex, read_shard, write_shard
+from mario.env import N_ACTIONS
 from mario.observation import OBS_DIM
 
 
@@ -22,7 +23,7 @@ def _synthetic_shard(path):
     rows = {
         "obs": obs,
         "hard_action": np.array([1, 1, 3, 1, 0], np.int8),
-        "soft_targets": np.tile(np.eye(7)[1], (n, 1)).astype(np.float32),
+        "soft_targets": np.tile(np.eye(N_ACTIONS)[1], (n, 1)).astype(np.float32),
         "value": np.zeros(n, np.float32),
         "level_id": np.full(n, 11, np.int16),
         "source": np.array([0, 0, 0, 1, 1], np.int8),

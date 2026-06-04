@@ -14,7 +14,8 @@ from mario.env import ACTIONS, N_ACTIONS  # noqa: F401  (re-exported)
 
 DEFAULT_CHUNK_FRAMES = 8
 
-ACTION_NAMES = ["NOOP", "right", "right+A", "right+B", "right+A+B", "A", "left"]
+ACTION_NAMES = ["NOOP", "right", "right+A", "right+B", "right+A+B", "A", "left",
+                "down", "up"]
 
 
 def action_name(idx: int) -> str:
