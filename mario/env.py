@@ -51,12 +51,15 @@ class MarioSim:
     """
 
     def __init__(self, world: int = 1, stage: int = 1, version: str = "v0",
-                 actions=ACTIONS):
+                 actions=ACTIONS, multi_stage: bool = False):
         self.world = world
         self.stage = stage
         self.version = version
         self.actions = actions
-        self.env_id = f"SuperMarioBros-{world}-{stage}-{version}"
+        self.multi_stage = multi_stage
+        # multi_stage: the suffix-less env plays continuously through level transitions,
+        # handles lives, and warp pipes actually warp — the substrate for the full-game run.
+        self.env_id = "SuperMarioBros-v0" if multi_stage else f"SuperMarioBros-{world}-{stage}-{version}"
         make = _silence(gym_super_mario_bros.make)
         self.env = JoypadSpace(make(self.env_id), actions)
         self.u = self.env.unwrapped

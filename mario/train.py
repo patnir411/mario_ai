@@ -95,7 +95,15 @@ def main() -> None:
     lr = 1e-4 if warm else 3e-4
     device = pick_device()
     manifest = ROOT / "data" / "manifest.json"
-    ds = DatasetIndex(manifest, K=K)
+    # LEVEL_FILTER="1-2" trains a per-level SPECIALIST (one MLP can't hold many levels
+    # via this DAgger approach — multi-task interference). Unset = all levels.
+    lf = os.environ.get("LEVEL_FILTER", "").strip()
+    level_ids = None
+    if lf:
+        w, s = (int(x) for x in lf.split("-"))
+        level_ids = {w * 10 + s}
+    ds = DatasetIndex(manifest, K=K, level_ids=level_ids)
+    print(f"level_filter={lf or 'ALL'}")
     val_tids = _val_trajectories(ds)
     train_mask, val_mask = ds.split(val_tids)
     print(f"device={device} samples={len(ds)} train={int(train_mask.sum())} "

@@ -26,6 +26,7 @@ class Node:
     x_max: int
     stuck: int
     frames: int
+    wp_idx: int = 0   # current waypoint index (non-linear levels); 0 for pure-x search
 
 
 @dataclass
@@ -124,3 +125,71 @@ def beam_search(world: int = 1, stage: int = 1, *, beam_width: int = 40,
     return SearchResult(False, best.path, chunk_frames, best.info, best.x_max,
                         best.frames, depth, nodes, time.perf_counter() - t0,
                         beam_width, weights)
+
+
+def search_from_state(sim: MarioSim, root_snap, *, world: int, stage: int,
+                      beam_width: int = 32, depth: int = 400, chunk_frames: int = 8,
+                      weights: RewardWeights = DEFAULT, stuck_cap: int = 16,
+                      waypoints=None, max_seconds: float = 90.0) -> list[int]:
+    """Beam search on the GIVEN sim, starting from root_snap (the live state).
+
+    Returns the action path that clears the level (flag_get OR a (world,stage) change —
+    works in both single- and multi-stage envs) or, if not cleared within depth/time, the
+    best-progress path. Uses the sim's own snapshot/restore so there's no cross-env
+    transfer error. The CALLER must restore root_snap afterward. `waypoints` (optional) is
+    a WaypointTracker spec for non-linear levels (maze/warp); pure-x reward if None.
+    """
+    from mario.waypoints import WaypointTracker
+    sim.restore(root_snap)
+    start_info = dict(sim.last_info)
+    x_start = int(start_info.get("x_pos", 0))
+    wp = WaypointTracker(waypoints) if waypoints else None
+
+    root = Node(root_snap, 0.0, start_info, [], x_start, 0, 0)
+    if wp:
+        root.wp_idx = 0
+    beam = [root]
+    best = root
+    t0 = time.perf_counter()
+
+    for _ in range(1, depth + 1):
+        if time.perf_counter() - t0 > max_seconds:
+            break
+        candidates = []
+        for node in beam:
+            wp_idx = getattr(node, "wp_idx", 0)
+            for a in range(N_ACTIONS):
+                sim.restore(node.snap)
+                info, done = sim.run_chunk(a, chunk_frames)
+                cleared = is_success(info) or \
+                    (int(info.get("world", world)), int(info.get("stage", stage))) != (world, stage)
+                if cleared:
+                    sim.restore(root_snap)
+                    return node.path + [a]
+                if is_death(info, done):
+                    continue
+                x = int(info.get("x_pos", 0))
+                nstuck = node.stuck + (0 if x > node.x_max else 1)
+                if nstuck > stuck_cap:
+                    continue
+                if wp:
+                    nidx, score = wp.score(info, wp_idx, x_start, weights)
+                else:
+                    nidx, score = wp_idx, state_score(info, x_start, 0, False, nstuck, weights)
+                child = Node(sim.snapshot(), score, info, node.path + [a],
+                             max(node.x_max, x), nstuck, node.frames + chunk_frames)
+                child.wp_idx = nidx
+                candidates.append(child)
+        if not candidates:
+            break
+        by_key = {}
+        for c in candidates:
+            k = _dedup_key(c.info) + (getattr(c, "wp_idx", 0),)
+            if k not in by_key or c.score > by_key[k].score:
+                by_key[k] = c
+        beam = sorted(by_key.values(), key=lambda c: c.score, reverse=True)[:beam_width]
+        if beam[0].x_max > best.x_max or getattr(beam[0], "wp_idx", 0) > getattr(best, "wp_idx", 0):
+            best = beam[0]
+
+    sim.restore(root_snap)
+    return best.path

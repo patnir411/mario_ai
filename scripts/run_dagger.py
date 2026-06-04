@@ -45,7 +45,8 @@ def _append_shard_to_manifest(shard_rel: str, n_new: int, n_dagger_total: int) -
 
 
 def _train(init_checkpoint: str = "") -> str:
-    env = {**os.environ, "PYTORCH_ENABLE_MPS_FALLBACK": "1"}
+    env = {**os.environ, "PYTORCH_ENABLE_MPS_FALLBACK": "1",
+           "LEVEL_FILTER": f"{WORLD}-{STAGE}"}   # specialist: train on THIS level only
     if init_checkpoint:
         env["INIT_CHECKPOINT"] = init_checkpoint   # warm-start DAgger fine-tuning
     out = subprocess.run([PY, "-m", "mario.train"], cwd=ROOT, env=env,

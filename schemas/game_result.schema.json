@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Mario AI full-game run result",
+  "type": "object",
+  "required": ["run_id", "schema_version", "kind", "mode", "route", "git_rev",
+    "env_fingerprint", "beat_game", "per_level", "totals", "artifacts"],
+  "additionalProperties": true,
+  "properties": {
+    "run_id": {"type": "string"},
+    "schema_version": {"type": "integer", "const": 1},
+    "kind": {"type": "string", "const": "game"},
+    "mode": {"type": "string", "enum": ["any%", "warpless"]},
+    "route": {"type": "array", "items": {"type": "string"}},
+    "git_rev": {"type": "string"},
+    "env_fingerprint": {"type": "object"},
+    "beat_game": {"type": "boolean"},
+    "per_level": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["world", "stage", "cleared", "framerule", "deaths",
+          "search_assist_chunks"],
+        "properties": {
+          "world": {"type": "integer"},
+          "stage": {"type": "integer"},
+          "cleared": {"type": "boolean"},
+          "framerule": {"type": ["integer", "null"]},
+          "deaths": {"type": "integer"},
+          "search_assist_chunks": {"type": "integer"},
+          "warp_taken": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "totals": {
+      "type": "object",
+      "required": ["levels_cleared", "total_framerule", "total_deaths"],
+      "properties": {
+        "levels_cleared": {"type": "integer"},
+        "total_framerule": {"type": "integer"},
+        "total_deaths": {"type": "integer"}
+      }
+    },
+    "search_assist_levels": {"type": "array", "items": {"type": "string"}},
+    "artifacts": {"type": "object"}
+  }
+}

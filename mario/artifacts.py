@@ -34,6 +34,11 @@ def validate_eval(ev: dict) -> None:
     _validator("eval.schema.json").validate(ev)
 
 
+def validate_game_result(g: dict) -> None:
+    """Raise jsonschema.ValidationError if `g` violates game_result.schema.json."""
+    _validator("game_result.schema.json").validate(g)
+
+
 def framerule_time(frames: int) -> int:
     """SMB level time in 21-frame framerules (the meaningful speed unit)."""
     return math.ceil(frames / 21)

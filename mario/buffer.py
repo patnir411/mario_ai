@@ -52,7 +52,9 @@ def read_shard(path: str | Path) -> dict[str, np.ndarray]:
 class DatasetIndex:
     """Loads all shards listed in a manifest, precomputes trajectory-aware K-stacks."""
 
-    def __init__(self, manifest_path: str | Path, K: int = 4):
+    def __init__(self, manifest_path: str | Path, K: int = 4, level_ids=None):
+        """level_ids: optional iterable of level_id (world*10+stage) to restrict to a
+        single level (specialist training). None = all levels (generalist)."""
         self.manifest = json.loads(Path(manifest_path).read_text())
         self.root = Path(manifest_path).parent
         self.K = K
@@ -67,6 +69,9 @@ class DatasetIndex:
             assert p["soft_targets"].shape[1] == N_ACTIONS, (
                 f"shard {s} soft width {p['soft_targets'].shape[1]} != N_ACTIONS {N_ACTIONS}")
         self.data = {k: np.concatenate([p[k] for p in parts]) for k in FIELDS}
+        if level_ids is not None:
+            mask = np.isin(self.data["level_id"], list(level_ids))
+            self.data = {k: v[mask] for k, v in self.data.items()}
         self._build_stacks()
         self._build_weights()
 
