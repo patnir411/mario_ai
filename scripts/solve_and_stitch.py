@@ -26,7 +26,7 @@ from mario.io import new_run_id, run_dir, write_json_atomic
 from mario.policy import Controller, load_policy
 from mario.render import replay
 from mario.reward import is_success
-from mario.search import search_from_state
+from mario.search import beam_search, search_from_state
 
 DATA = ROOT / "data"
 SOL = DATA / "solutions"
@@ -63,21 +63,25 @@ def solve_level(world, stage, beam, max_depth, waypoints):
         if p:
             write_json_atomic(cache, {"path": p, "solved": True, "by": "net"})
             return p, True
-    sim = MarioSim(world, stage)
-    sim.reset(0)
-    snap = sim.snapshot()
-    path = search_from_state(sim, snap, world=world, stage=stage, beam_width=beam,
-                             depth=max_depth, waypoints=waypoints, max_seconds=240)
-    sim.restore(snap)
-    solved = False
-    for a in path:
-        info, done = sim.run_chunk(a, 8)
-        if is_success(info):
-            solved = True
-            break
-        if done:
-            break
-    sim.close()
+    if waypoints:   # maze/warp level: waypoint-guided search from the level start
+        sim = MarioSim(world, stage)
+        sim.reset(0)
+        snap = sim.snapshot()
+        path = search_from_state(sim, snap, world=world, stage=stage, beam_width=beam,
+                                 depth=max_depth, waypoints=waypoints, max_seconds=600)
+        sim.restore(snap)
+        solved = False
+        for a in path:
+            info, done = sim.run_chunk(a, 8)
+            if is_success(info):
+                solved = True
+                break
+            if done:
+                break
+        sim.close()
+    else:           # normal level: full backbone beam search (no time cap)
+        r = beam_search(world, stage, beam_width=beam, max_depth=max_depth)
+        path, solved = r.path, r.solved
     write_json_atomic(cache, {"path": path, "solved": solved, "by": "search"})
     return path, solved
 

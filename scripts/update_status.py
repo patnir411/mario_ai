@@ -164,8 +164,16 @@ def render_block(status: dict) -> str:
     cb = status.get("current_best", {})
     cb_parts = []
     for lvl, v in sorted(cb.items()):
-        state = "beat" if v["beat"] else f"{v['completion_frac']:.0%}"
-        cb_parts.append(f"{lvl}: {state} (fr={v['framerule_time']})")
+        if v.get("beat"):
+            state = f"beat (fr={v.get('framerule_time')})"
+        elif "completion_frac" in v:
+            state = f"{v['completion_frac']:.0%}"
+        else:
+            state = ""
+        pcr = v.get("policy_completion_rate")
+        if pcr is not None:
+            state = (state + " " if state else "") + f"net={pcr:.0%}"
+        cb_parts.append(f"{lvl}: {state}".strip())
     cb_str = "; ".join(cb_parts) or "none yet"
     b = status.get("bench", {})
     t = status.get("tests", {})
