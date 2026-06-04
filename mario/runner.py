@@ -58,12 +58,19 @@ class GameRunner:
                 "deaths": lvl_deaths, "search_assist_chunks": rescue_chunks,
                 "warp_taken": None,
             })
+            tag = "CLEARED" if cleared else "STUCK"
+            print(f"  [{w}-{s}] {tag} chunks={lvl_chunks} deaths={lvl_deaths} "
+                  f"search={rescue_chunks} total={total}", flush=True)
 
         while total < max_total_chunks:
             if lvl_chunks > max_level_chunks:   # stuck on this level — stop gracefully
                 finalize(cleared=False)
                 break
-            use_search = self.rescue and (ctrl is None or stall >= STALL_CHUNKS)
+            # Rescue when: no net, the net stalls, or the net has already died here once
+            # (specialists trained single-stage often don't transfer to the multi-stage
+            # level start, so they die rather than stall — search takes over).
+            use_search = self.rescue and (ctrl is None or stall >= STALL_CHUNKS
+                                          or lvl_deaths >= 1)
 
             if use_search:
                 snap = sim.snapshot()
@@ -108,13 +115,15 @@ class GameRunner:
                 x_max, stall, lvl_chunks, lvl_deaths, rescue_chunks = info["x_pos"], 0, 0, 0, 0
                 life = info["life"]
                 continue
-            # death / respawn within the level
-            if info["life"] != life:
+            # death / respawn within the level (life DECREASE; ignore 1-up increases)
+            if info["life"] < life:
                 lvl_deaths += 1
                 life = info["life"]
                 if ctrl:
                     ctrl.reset()
                 x_max, stall = info["x_pos"], 0
+            elif info["life"] != life:
+                life = info["life"]   # 1-up: just track it
             if done:   # game over (lives exhausted) — unless it was the beat transition
                 if (w, s) == tuple(beat) and info.get("flag_get"):
                     beat_game = True
