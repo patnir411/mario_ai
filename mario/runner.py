@@ -37,7 +37,7 @@ class GameRunner:
             self.frames.append(np.asarray(sim.last_obs).copy())
 
     def run(self, *, seed: int = 0, max_total_chunks: int = 80000,
-            beat=(8, 4)) -> dict:
+            max_level_chunks: int = 1500, beat=(8, 4)) -> dict:
         from mario.search import search_from_state
         sim = MarioSim(multi_stage=True)
         info = sim.reset(seed=seed)
@@ -60,6 +60,9 @@ class GameRunner:
             })
 
         while total < max_total_chunks:
+            if lvl_chunks > max_level_chunks:   # stuck on this level — stop gracefully
+                finalize(cleared=False)
+                break
             use_search = self.rescue and (ctrl is None or stall >= STALL_CHUNKS)
 
             if use_search:
