@@ -20,8 +20,20 @@ from mario.policy import Controller, load_policy
 from mario.render import make_contact_sheet
 from mario.reward import death_cause, is_death, is_success
 
-LEVEL_LENGTHS = {(1, 1): 3161}
+LEVEL_LENGTHS = {(1, 1): 3161}   # fallback; primary source is the manifest backbone_run
 PASS_THRESHOLD = 0.90
+
+
+def level_length(world: int, stage: int, fallback: int) -> int:
+    """Level length (flag x) from the dataset manifest's backbone solve; fallback otherwise."""
+    import json
+    mp = Path(__file__).resolve().parent.parent / "data" / "manifest.json"
+    if mp.exists():
+        lv = json.loads(mp.read_text()).get("levels", {}).get(f"{world}-{stage}", {})
+        x = lv.get("backbone_run", {}).get("x_at_flag", 0)
+        if x and x > 0:
+            return int(x)
+    return LEVEL_LENGTHS.get((world, stage), max(fallback, 1))
 
 
 def rollout(controller: Controller, world: int, stage: int, seed: int,
@@ -41,7 +53,7 @@ def rollout(controller: Controller, world: int, stage: int, seed: int,
     sim.close()
     beat = is_success(info)
     died = is_death(info, done)
-    length = LEVEL_LENGTHS.get((world, stage), max(x_max, 1))
+    length = level_length(world, stage, x_max)
     outcome = {
         "beat_level": beat, "death": died,
         "death_cause": death_cause(info) if died else None,
@@ -90,7 +102,9 @@ def eval_suite(checkpoint_path, levels, seeds, *, milestone="V2") -> dict:
             best_for_sheet = (world, stage, seeds[i], rs[i][1])
 
     mean_cr = round(sum(lv["completion_rate"] for lv in out_levels.values()) / len(out_levels), 4)
-    passed = out_levels.get("1-1", {}).get("completion_rate", 0) >= PASS_THRESHOLD
+    worst = min(lv["completion_rate"] for lv in out_levels.values())
+    worst_lvl = min(out_levels, key=lambda k: out_levels[k]["completion_rate"])
+    passed = worst >= PASS_THRESHOLD   # ALL evaluated levels must clear the bar
 
     run_id = new_run_id("v2_eval")
     d = run_dir(run_id)
@@ -121,7 +135,7 @@ def eval_suite(checkpoint_path, levels, seeds, *, milestone="V2") -> dict:
         "mps_parity": parity,
         "artifacts": {"contact_sheet": sheet_rel} if sheet_rel else {},
         "pass": bool(passed),
-        "pass_reason": f"1-1 completion_rate {out_levels.get('1-1',{}).get('completion_rate')} "
+        "pass_reason": f"worst level {worst_lvl} completion_rate {worst} "
                        f"{'>=' if passed else '<'} {PASS_THRESHOLD}",
     }
     validate_eval(ev)
@@ -139,16 +153,26 @@ def _resolve_checkpoint(arg: str) -> Path:
     raise SystemExit(f"checkpoint not found: {arg}")
 
 
+def parse_levels(arg: str) -> list[tuple[int, int]]:
+    """'1-1' or '1-1,1-2,1-3' -> [(1,1),(1,2),(1,3)]."""
+    out = []
+    for tok in arg.split(","):
+        w, s = tok.strip().split("-")
+        out.append((int(w), int(s)))
+    return out
+
+
 def main() -> None:
     if len(sys.argv) < 2:
-        raise SystemExit("usage: python -m mario.eval <checkpoint_run_id_or_path> [n_seeds]")
+        raise SystemExit("usage: python -m mario.eval <checkpoint> [n_seeds] [levels e.g. 1-1,1-2]")
     ckpt = _resolve_checkpoint(sys.argv[1])
     n_seeds = int(sys.argv[2]) if len(sys.argv) > 2 else 20
-    ev = eval_suite(ckpt, [(1, 1)], list(range(n_seeds)))
-    lv = ev["levels"]["1-1"]
-    print(f"1-1 completion_rate={lv['completion_rate']} ({lv['n_beat']}/{lv['n_rollouts']}) "
-          f"median_framerule={lv['median_framerule_time']} deaths={lv['deaths_by_cause']}")
-    print(f"V2 GATE: {'PASS' if ev['pass'] else 'FAIL'} — {ev['pass_reason']}")
+    levels = parse_levels(sys.argv[3]) if len(sys.argv) > 3 else [(1, 1)]
+    ev = eval_suite(ckpt, levels, list(range(n_seeds)))
+    for key, lv in ev["levels"].items():
+        print(f"{key}: completion_rate={lv['completion_rate']} ({lv['n_beat']}/{lv['n_rollouts']}) "
+              f"median_framerule={lv['median_framerule_time']} deaths={lv['deaths_by_cause']}")
+    print(f"GATE: {'PASS' if ev['pass'] else 'FAIL'} — {ev['pass_reason']}")
     print(f"eval.json: runs/{ev['run_id']}/eval.json")
 
 

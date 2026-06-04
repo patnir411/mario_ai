@@ -85,12 +85,12 @@ def main() -> None:
     cache = DATA / "shards" / f"level-{world}-{stage}" / "backbone.json"
     if cache.exists():
         c = json.loads(cache.read_text())
-        P, bb_solved = c["path"], c["solved"]
+        P, bb_solved, bb_x = c["path"], c["solved"], c.get("x_max", 0)
         print(f"  backbone (cached): solved={bb_solved} len={len(P)}")
     else:
         print("  backbone beam_search ...", flush=True)
         bb = beam_search(world, stage, beam_width=48, max_depth=180, seed=seed)
-        P, bb_solved = bb.path, bb.solved
+        P, bb_solved, bb_x = bb.path, bb.solved, bb.x_max
         cache.parent.mkdir(parents=True, exist_ok=True)
         write_json_atomic(cache, {"path": P, "solved": bb_solved, "x_max": bb.x_max})
         print(f"  backbone: solved={bb_solved} len={len(P)} x_max={bb.x_max} "
@@ -168,7 +168,8 @@ def main() -> None:
         "soft_entropy_p95": round(float(np.percentile(ent, 95)), 3),
         "hard_action_hist": hist,
         "shards": [shard_rel],
-        "backbone_run": {"solved": bool(bb_solved), "framerule": None},
+        "backbone_run": {"solved": bool(bb_solved), "x_at_flag": int(bb_x),
+                         "framerule": __import__("math").ceil(len(P) * 8 / 21)},
     }
     manifest["generated_at"] = utc_now_iso()
     manifest["git_rev"] = git_rev()

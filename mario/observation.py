@@ -22,9 +22,7 @@ MARIO = 3
 HAZARD = 4   # projectiles/firebars/hammers/Bowser-fire — its own one-hot channel
 N_CHANNELS = 5
 
-# Levels whose physics is swimming (no gravity-fall → no pit). Used to gate the
-# pit sensor and set the is_water scalar so one net can separate water from land.
-UNDERWATER = {(2, 2), (7, 2)}
+from mario.levels import UNDERWATER  # noqa: E402  (level-type knowledge lives in one place)
 
 TILE_BASE = 0x0500
 PAGE_BYTES = 208          # 13 rows * 16 cols

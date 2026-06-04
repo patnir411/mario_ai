@@ -27,7 +27,7 @@ from mario.io import write_json_atomic
 
 DATA = ROOT / "data"
 PY = str(ROOT / "venv" / "bin" / "python")
-WORLD, STAGE = 1, 1
+WORLD, STAGE = 1, 1   # set from CLI in main()
 KEEP = 12
 TARGET = 0.90
 
@@ -64,11 +64,15 @@ def _eval(run_id: str, n_seeds: int = 20) -> dict:
 
 
 def main() -> None:
+    global WORLD, STAGE
     if len(sys.argv) < 2:
-        raise SystemExit("usage: run_dagger.py <bc_checkpoint_run_id> [rounds] [seeds]")
+        raise SystemExit("usage: run_dagger.py <bc_checkpoint_run_id> [rounds] [seeds] [level e.g. 1-2]")
     ckpt_run = sys.argv[1]
     rounds = int(sys.argv[2]) if len(sys.argv) > 2 else 4
     collect_seeds = list(range(int(sys.argv[3]) if len(sys.argv) > 3 else 8))
+    if len(sys.argv) > 4:
+        WORLD, STAGE = (int(x) for x in sys.argv[4].split("-"))
+    print(f"DAgger level {WORLD}-{STAGE}")
     n_proc = max(1, min(11, (os.cpu_count() or 4) - 1))
 
     checkpoint = ROOT / "runs" / ckpt_run / "checkpoint.pt"

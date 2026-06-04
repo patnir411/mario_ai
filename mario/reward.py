@@ -40,15 +40,17 @@ def is_death(info: dict, done: bool) -> bool:
 
 
 def death_cause(info: dict) -> str:
-    """Best-effort death cause for diagnostics/histograms.
+    """Best-effort death cause for diagnostics/histograms (level-aware).
 
-    Refined empirically in V3 once we have real death trajectories. `timeout` is
-    reliable from the clock; pit vs enemy is approximate and flagged as such.
+    `timeout` is reliable from the clock. Underwater levels have no pits (swimming, no
+    gravity-fall), so low y there is normal — never classify as "pit". Elsewhere low y
+    indicates a fall into a pit; otherwise an enemy.
     """
+    from mario.levels import is_underwater
     if int(info.get("time", 1)) <= 0:
         return "timeout"
-    # y_pos near the bottom of the play-field indicates a fall into a pit. The exact
-    # threshold is calibrated against real deaths in V3; until then report best-effort.
+    if is_underwater(int(info.get("world", 0)), int(info.get("stage", 0))):
+        return "enemy"
     y = int(info.get("y_pos", 0))
     if y < 80:
         return "pit"
