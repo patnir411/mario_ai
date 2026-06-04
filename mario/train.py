@@ -53,10 +53,15 @@ def _loss(net, batch, device):
     src = torch.from_numpy(batch["source"]).to(device)
     weight = weight * torch.where(src == 2, DAGGER_WEIGHT, 1.0)  # emphasize corrections
     logits, value_pred = net(X)
+    # NOTE (Jun-4): empirically TESTED the audit's distillation tweaks (drop class-balancing,
+    # MSE->BCE value head). BOTH regressed 1-1 (net stalled at x1413, failed the pit jump):
+    # the inv-frequency weighting is load-bearing — it's what lets the tiny net learn the
+    # RARE-but-critical jump action; and the BCE value loss perturbed the policy via the
+    # shared trunk. So we keep the proven loss. A meaningful value head for value-guided
+    # search needs an INDEPENDENT/detached value net (Phase 2), not this shared-trunk head.
     ce = (F.cross_entropy(logits, hard, reduction="none") * weight).mean()
-    # Soft targets are uniform on open ground (would blur decisiveness) and sharp at
-    # hazards. Weight each sample's soft-KL by how INFORMATIVE it is: w = 1 - H(soft)/ln7,
-    # so near-uniform soft contributes ~0 and sharp (hazard) soft contributes fully.
+    # Soft targets are uniform on open ground (blurs decisiveness) and sharp at hazards.
+    # Weight each sample's soft-KL by how INFORMATIVE it is: w = 1 - H(soft)/ln_A.
     H = -(soft * torch.log(soft + 1e-9)).sum(1)
     info_w = (1.0 - H / LN_A).clamp(min=0.0)
     soft_ce = (-(soft * F.log_softmax(logits, dim=1)).sum(1) * info_w).mean()

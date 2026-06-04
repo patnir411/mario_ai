@@ -58,14 +58,22 @@ def death_cause(info: dict) -> str:
 
 
 def state_score(info: dict, x_start: int, frames: int = 0, died: bool = False,
-                stuck: int = 0, w: RewardWeights = DEFAULT) -> float:
+                stuck: int = 0, w: RewardWeights = DEFAULT,
+                progress: float | None = None) -> float:
     """Scalar score of a (possibly partial) trajectory ending in `info`.
 
     Higher is better. Beam search keeps the top-k by this score, so it must rank
     "further right and alive" above "stuck" above "dead", with the flag dominating.
     Deliberately reads ONLY x_pos / flag / death — never score/coins/timer.
+
+    `progress` overrides the default (x_pos - x_start) with a caller-supplied LEVEL-GLOBAL
+    progress coordinate. This is load-bearing for multi-area levels: x_pos is AREA-LOCAL
+    (it resets ~40 on a pipe/area transition), so the default makes entering the correct
+    pipe look like a ~-1000px catastrophe. The search passes Φ = area_seq*STRIDE +
+    (x_pos - area_entry_x) instead, so an area transition reads as large forward progress.
     """
-    score = w.progress * (int(info.get("x_pos", 0)) - x_start)
+    p = progress if progress is not None else (int(info.get("x_pos", 0)) - x_start)
+    score = w.progress * p
     if is_success(info):
         score += w.flag
     if died:

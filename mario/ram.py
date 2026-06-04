@@ -30,10 +30,37 @@ ENEMY_ACTIVE = range(0x000F, 0x0014)
 TILE_DATA = range(0x0500, 0x06A0)  # current on-screen tile grid in RAM
 SCREEN_IN_LEVEL = 0x071A
 
+# --- area / transition signals ------------------------------------------
+# AREA_NUMBER is the RAW gym-side area byte; entering a pipe/area transition flips it.
+# It is the primary "did I escape this room" success signal for maze castles (8-4).
+# (Note: gym's info `_area` reports ram[AREA_NUMBER] + 1, so raw 3 == logical area 4.)
+AREA_NUMBER = 0x0760
+AREA_POINTER = 0x0750        # which area-object set is loaded
+CHANGE_AREA_TIMER = 0x06DE   # nonzero while an area/pipe transition is in progress
+Y_HIGH_POS = 0x00B5          # vertical "page" of Mario's Y (stays 1 in 8-4 area-1)
+
 
 def mario_level_x(ram) -> int:
     """Absolute x position in the level = page*256 + x_on_screen."""
     return int(ram[MARIO_LEVEL_PAGE]) * 256 + int(ram[MARIO_X_ON_SCREEN])
+
+
+def area(ram) -> int:
+    """Raw area byte ($0760). NOTE: in gym-super-mario-bros this is often STABLE across a
+    level's sub-area (pipe/room) transitions — use `area_pointer` for those."""
+    return int(ram[AREA_NUMBER])
+
+
+def area_pointer(ram) -> int:
+    """Area-object-set pointer ($0750). EMPIRICALLY this is the byte that changes on a
+    pipe/sub-area transition in this env (verified on 1-2, 4-2), whereas $0760 stays put.
+    This is the correct 'entered a new room' signal for maze castles (8-4)."""
+    return int(ram[AREA_POINTER])
+
+
+def area_key(ram) -> tuple:
+    """Combined area identity = (raw area, area pointer) — distinct per sub-area/room."""
+    return (int(ram[AREA_NUMBER]), int(ram[AREA_POINTER]))
 
 
 def signed(byte: int) -> int:
