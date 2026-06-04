@@ -143,6 +143,44 @@ def label_state(world: int, stage: int, action_path_prefix, *, chunk_frames: int
                        all_doomed=all_doomed)
 
 
+def fast_label(world: int, stage: int, action_path_prefix, *, chunk_frames: int = 8,
+               tau: float = 40.0, weights: RewardWeights = DEFAULT, seed: int = 0,
+               sim: MarioSim | None = None):
+    """Cheap labeler: obs + 1-ply (no deep lookahead) fatal-masked soft targets + value.
+
+    ~7 chunks/state vs ~1000 for label_state. Used for large-scale dataset generation
+    where the HARD label (from a search trajectory) is the primary signal and soft targets
+    only need to mask fatal actions. Returns (obs, soft[7], value, all_doomed).
+    """
+    own = sim is None
+    if own:
+        sim = MarioSim(world, stage)
+    sim.reset(seed=seed)
+    for a in action_path_prefix:
+        _info, done = sim.run_chunk(a, chunk_frames)
+        if done:
+            break
+    x_start = int(sim.last_info.get("x_pos", 0))
+    obs = observe(sim.ram, sim.last_info)
+    s0 = sim.snapshot()
+    q = np.full(N_ACTIONS, _NEG, dtype=np.float64)
+    for a in range(N_ACTIONS):
+        sim.restore(s0)
+        info, done = sim.run_chunk(a, chunk_frames)
+        if is_success(info):
+            q[a] = weights.flag + weights.progress * (int(info.get("x_pos", 0)) - x_start)
+        elif is_death(info, done):
+            q[a] = -weights.death
+        else:
+            q[a] = state_score(info, x_start, chunk_frames, died=False, stuck=0, w=weights)
+    if own:
+        sim.close()
+    ex = np.exp((q - q.max()) / tau)
+    soft = (ex / ex.sum()).astype(np.float32)
+    all_doomed = bool((q <= -weights.death / 2).all())
+    return obs.astype(np.float32), soft, float(q.max()), all_doomed
+
+
 def soft_entropy(soft: np.ndarray) -> float:
     """Shannon entropy (nats) of a soft-target distribution — sanity metric."""
     p = soft[soft > 0]

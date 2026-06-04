@@ -111,4 +111,5 @@ class DatasetIndex:
                 "soft": self.data["soft_targets"][b],
                 "value": self.data["value"][b],
                 "weight": self.weight[b],
+                "source": self.data["source"][b],
             }

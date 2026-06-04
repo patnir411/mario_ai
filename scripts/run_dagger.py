@@ -44,9 +44,11 @@ def _append_shard_to_manifest(shard_rel: str, n_new: int, n_dagger_total: int) -
     write_json_atomic(mp_path, m)
 
 
-def _train() -> str:
-    out = subprocess.run([PY, "-m", "mario.train"], cwd=ROOT,
-                         env={**os.environ, "PYTORCH_ENABLE_MPS_FALLBACK": "1"},
+def _train(init_checkpoint: str = "") -> str:
+    env = {**os.environ, "PYTORCH_ENABLE_MPS_FALLBACK": "1"}
+    if init_checkpoint:
+        env["INIT_CHECKPOINT"] = init_checkpoint   # warm-start DAgger fine-tuning
+    out = subprocess.run([PY, "-m", "mario.train"], cwd=ROOT, env=env,
                          capture_output=True, text=True)
     print(out.stdout[-400:])
     for line in out.stdout.splitlines():
@@ -94,7 +96,7 @@ def main() -> None:
         write_shard(DATA / shard_rel, cols)
         _append_shard_to_manifest(shard_rel, len(rows), len(rows))
 
-        new_run = _train()
+        new_run = _train(init_checkpoint=str(checkpoint))
         ev = _eval(new_run)
         cr = ev["levels"][f"{WORLD}-{STAGE}"]["completion_rate"]
         causes = ev["levels"][f"{WORLD}-{STAGE}"]["deaths_by_cause"]

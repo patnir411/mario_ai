@@ -56,14 +56,23 @@ def load_policy(path, device="cpu"):
     return net, ckpt
 
 
+# Inference bias: under uncertainty (near-uniform logits) plain argmax ties to index 0
+# (NOOP) and the policy stalls/times out. A mild bias against NOOP/left makes the
+# controller prefer forward motion when it's unsure, without overriding confident NOOPs.
+ACTION_BIAS = np.array([-0.6, 0, 0, 0, 0, 0, -1.0], dtype=np.float32)  # NOOP, .., left
+
+
 class Controller:
     """Wraps a trained net as a controller. act() returns one action per chunk."""
 
-    def __init__(self, net: MarioPolicy, device="cpu", chunk_frames: int = 8):
+    def __init__(self, net: MarioPolicy, device="cpu", chunk_frames: int = 8,
+                 action_bias=ACTION_BIAS):
         self.net = net.to(device).eval()
         self.device = device
         self.K = net.K
         self.chunk_frames = chunk_frames
+        self.action_bias = (torch.from_numpy(np.asarray(action_bias, np.float32))
+                            if action_bias is not None else None)
         self.reset()
 
     def reset(self) -> None:
@@ -78,6 +87,8 @@ class Controller:
 
     def act(self, ram, info) -> int:
         logits, _v = self._logits(ram, info)
+        if self.action_bias is not None:
+            logits = logits + self.action_bias
         return int(torch.argmax(logits).item())
 
     def act_with_entropy(self, ram, info):

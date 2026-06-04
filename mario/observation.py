@@ -92,19 +92,47 @@ def tile_grid(ram) -> np.ndarray:
     return grid
 
 
-def scalar_features(ram, info: dict) -> np.ndarray:
-    """Small vector of velocity / state scalars (relative / normalized, no absolute x)."""
+def gap_ahead(grid: np.ndarray) -> float:
+    """Distance (normalized) to the nearest pit ahead at Mario's foot level.
+
+    The tile grid is 16px-quantized so the policy can't time a jump from the grid alone;
+    this scalar (with x_subtile below) makes 'a pit is N tiles ahead' explicit — the key
+    signal for clearing the first 1-1 gap. Returns 1.0 if no gap within the window.
+    """
+    foot = UP + 1  # ground sits directly below Mario's cell (MARIO_ROW_ADJUST)
+    if foot >= GRID_H:
+        return 1.0
+    for gx in range(LEFT, GRID_W):
+        if grid[foot, gx] != SOLID:        # missing ground support ahead = pit/edge
+            return (gx - LEFT) / max(RIGHT, 1)
+    return 1.0
+
+
+def scalar_features(ram, info: dict, grid: np.ndarray | None = None) -> np.ndarray:
+    """Velocity / state scalars + sub-tile position + pit sensor (all relative/normalized).
+
+    sub-tile x and gap_ahead are what let the policy TIME a jump — within a 16px tile the
+    ego grid is identical, so without these 'jump now' vs 'wait' are indistinguishable.
+    """
+    if grid is None:
+        grid = tile_grid(ram)
     vx = R.signed(int(ram[R.MARIO_X_SPEED]))
     vy = R.signed(int(ram[R.MARIO_Y_VELOCITY]))
     powerup = int(ram[R.POWERUP_STATE])
     float_state = int(ram[R.PLAYER_FLOAT_STATE])
     on_ground = 1.0 if float_state == 0 else 0.0
+    x_subtile = (mario_level_x(ram) % 16) / 16.0
     return np.array([
         vx / 40.0, vy / 40.0,
         min(powerup, 2) / 2.0,
         on_ground,
         1.0 if float_state == 1 else 0.0,  # jumping
+        x_subtile,                          # sub-tile horizontal phase (jump timing)
+        gap_ahead(grid),                    # distance to the next pit ahead
     ], dtype=np.float32)
+
+
+N_SCALARS = 7
 
 
 def observe(ram, info: dict) -> np.ndarray:
@@ -113,7 +141,7 @@ def observe(ram, info: dict) -> np.ndarray:
     onehot = np.zeros((4, GRID_H, GRID_W), dtype=np.float32)
     for code in (EMPTY, SOLID, ENEMY, MARIO):
         onehot[code] = (grid == code)
-    return np.concatenate([onehot.reshape(-1), scalar_features(ram, info)])
+    return np.concatenate([onehot.reshape(-1), scalar_features(ram, info, grid)])
 
 
-OBS_DIM = 4 * GRID_H * GRID_W + 5
+OBS_DIM = 4 * GRID_H * GRID_W + N_SCALARS

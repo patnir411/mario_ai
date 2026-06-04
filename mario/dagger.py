@@ -16,16 +16,16 @@ import os
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 
 from mario.env import MarioSim
-from mario.label import label_state, soft_entropy
+from mario.label import fast_label, soft_entropy
 from mario.policy import Controller, load_policy
 from mario.reward import is_death, is_success
 from mario.search import beam_search
 
-PREDEATH_K = 8        # label this many chunks of decisive recovery before a death
+PREDEATH_OFFSETS = [4, 8, 12, 16]  # anchor at several points before a death (dense coverage)
 ENTROPY_FLAG = 1.4    # also flag uncertain states (nats; ln7=1.95)
 RECOVER_BEAM = 24
 RECOVER_DEPTH = 60
-ANCHOR_BUCKET = 32    # dedup anchors by this x-bucket so seeds don't pile up duplicates
+ANCHOR_BUCKET = 12    # dedup anchors by this x-bucket so seeds don't pile up duplicates
 
 
 def collect_failures(checkpoint, world, stage, seeds, max_chunks=400):
@@ -64,7 +64,8 @@ def collect_failures(checkpoint, world, stage, seeds, max_chunks=400):
             anchors.setdefault(xb, prefix[:anchor_len])
 
         if died:
-            _add(len(prefix) - PREDEATH_K)
+            for off in PREDEATH_OFFSETS:
+                _add(len(prefix) - off)
         for i, e in enumerate(ent_log):
             if e > ENTROPY_FLAG:
                 _add(max(0, i - 2))
@@ -81,13 +82,13 @@ def dagger_label_worker(spec):
     rows = []
     for j in range(min(keep, len(rec.path))):
         prefix = anchor_prefix + rec.path[:j]
-        r = label_state(world, stage, prefix, seed=seed)
-        if r.all_doomed:
+        obs, soft, value, all_doomed = fast_label(world, stage, prefix, seed=seed)
+        if all_doomed:
             continue
         rows.append({
-            "obs": r.obs, "hard_action": int(rec.path[j]), "soft_targets": r.soft_targets,
-            "value": r.value, "level_id": world * 10 + stage, "source": 2,
+            "obs": obs, "hard_action": int(rec.path[j]), "soft_targets": soft,
+            "value": value, "level_id": world * 10 + stage, "source": 2,
             "seed": seed, "prefix_len": len(prefix), "trajectory_id": tid,
-            "_entropy": soft_entropy(r.soft_targets),
+            "_entropy": soft_entropy(soft),
         })
     return rows

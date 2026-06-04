@@ -32,7 +32,7 @@ import numpy as np
 
 from mario.buffer import FIELDS, encode_level_id, write_shard
 from mario.io import env_fingerprint, git_rev, utc_now_iso, write_json_atomic
-from mario.label import label_state, soft_entropy
+from mario.label import fast_label, soft_entropy
 from mario.search import beam_search
 
 DATA = ROOT / "data"
@@ -60,14 +60,14 @@ def _recovery_worker(spec):
 
 def _label_worker(task):
     world, stage, seed, prefix, hard, source, tid, plen = task
-    r = label_state(world, stage, prefix, seed=seed)
-    if r.all_doomed:
+    obs, soft, value, all_doomed = fast_label(world, stage, prefix, seed=seed)
+    if all_doomed:
         return None
     return {
-        "obs": r.obs, "hard_action": hard, "soft_targets": r.soft_targets,
-        "value": r.value, "level_id": encode_level_id(world, stage),
+        "obs": obs, "hard_action": hard, "soft_targets": soft,
+        "value": value, "level_id": encode_level_id(world, stage),
         "source": source, "seed": seed, "prefix_len": plen, "trajectory_id": tid,
-        "_entropy": soft_entropy(r.soft_targets),
+        "_entropy": soft_entropy(soft),
     }
 
 
@@ -104,9 +104,19 @@ def main() -> None:
         for pert in _pick_perturbations(P[t], n=n_perturb):
             specs.append((world, stage, seed, P[:t] + [pert], tid, t, pert))
             tid += 1
-    print(f"  {len(specs)} recovery searches ...", flush=True)
-    with mp.Pool(n_proc) as pool:
-        recoveries = pool.map(_recovery_worker, specs)
+    # recovery searches are deterministic -> cache by prefix so obs-only re-gens are fast
+    rec_cache_path = DATA / "shards" / f"level-{world}-{stage}" / "recoveries.json"
+    rec_cache = (json.loads(rec_cache_path.read_text()) if rec_cache_path.exists() else {})
+    todo = [s for s in specs if ",".join(map(str, s[3])) not in rec_cache]
+    print(f"  {len(specs)} recovery anchors ({len(specs)-len(todo)} cached, {len(todo)} to search) ...",
+          flush=True)
+    if todo:
+        with mp.Pool(n_proc) as pool:
+            for s, rec in zip(todo, pool.map(_recovery_worker, todo)):
+                rec_cache[",".join(map(str, s[3]))] = rec["cont"]
+        write_json_atomic(rec_cache_path, rec_cache)
+    recoveries = [{"tid": s[4], "anchor_t": s[5], "pert": s[6],
+                   "cont": rec_cache[",".join(map(str, s[3]))]} for s in specs]
 
     # 3) build label tasks: on-path + recovered states
     tasks = []

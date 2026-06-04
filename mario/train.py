@@ -10,6 +10,7 @@ CPU-vs-MPS parity record so we never trust an MPS eval that silently diverges.
 from __future__ import annotations
 
 import csv
+import os
 import sys
 from pathlib import Path
 
@@ -26,6 +27,7 @@ from mario.policy import MarioPolicy, save_checkpoint
 
 VALUE_SCALE = 10000.0
 LN7 = float(np.log(7))
+DAGGER_WEIGHT = 4.0   # up-weight DAgger correction states (source==2) so they actually move the policy
 
 
 def pick_device() -> str:
@@ -47,6 +49,8 @@ def _loss(net, batch, device):
     soft = torch.from_numpy(batch["soft"]).to(device)
     value = torch.from_numpy(batch["value"]).to(device).clamp(-VALUE_SCALE, 2 * VALUE_SCALE)
     weight = torch.from_numpy(batch["weight"]).to(device)
+    src = torch.from_numpy(batch["source"]).to(device)
+    weight = weight * torch.where(src == 2, DAGGER_WEIGHT, 1.0)  # emphasize corrections
     logits, value_pred = net(X)
     ce = (F.cross_entropy(logits, hard, reduction="none") * weight).mean()
     # Soft targets are uniform on open ground (would blur decisiveness) and sharp at
@@ -80,18 +84,28 @@ def mps_parity(net, X32) -> dict:
 
 def main() -> None:
     K = 4
-    epochs = 40
+    # Warm-start (DAgger fine-tuning): continue from a prior checkpoint with a lower LR and
+    # fewer epochs so small correction sets actually adjust the policy without high-variance
+    # retrain-from-scratch wiping out earlier-level competence.
+    init_ckpt = os.environ.get("INIT_CHECKPOINT", "").strip()
+    warm = bool(init_ckpt)
+    epochs = 25 if warm else 40
     batch = 256
-    lr = 3e-4
+    lr = 1e-4 if warm else 3e-4
     device = pick_device()
     manifest = ROOT / "data" / "manifest.json"
     ds = DatasetIndex(manifest, K=K)
     val_tids = _val_trajectories(ds)
     train_mask, val_mask = ds.split(val_tids)
     print(f"device={device} samples={len(ds)} train={int(train_mask.sum())} "
-          f"val={int(val_mask.sum())} K={K}")
+          f"val={int(val_mask.sum())} K={K} warm_start={warm}")
 
     net = MarioPolicy(K=K).to(device)
+    if warm:
+        from mario.policy import load_policy
+        src, _ = load_policy(init_ckpt, device=device)
+        net.load_state_dict(src.state_dict())
+        print(f"  warm-started from {init_ckpt}")
     n_params = sum(p.numel() for p in net.parameters())
     opt = torch.optim.AdamW(net.parameters(), lr=lr, weight_decay=1e-4)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=epochs)
@@ -99,7 +113,7 @@ def main() -> None:
     run_id = new_run_id("v2_bc_1_1")
     d = run_dir(run_id)
     curve_path = d / "curve.csv"
-    best_val, best_state, patience, bad = 1e9, None, 8, 0
+    best_val, best_state, patience, bad = 1e9, None, 15, 0
     with open(curve_path, "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["epoch", "train_loss", "train_ce", "val_ce", "val_acc"])
