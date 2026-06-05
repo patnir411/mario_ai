@@ -176,6 +176,7 @@ def coverage_search(world: int = 1, stage: int = 1, *, beam_width: int = 48,
                     stuck_cap: int = 48, cov_bonus: float = 50.0,
                     area_bonus: float = 0.0, ground_bonus: float = 0.0,
                     loop_back_px: int = 0, pipe_macro_chunks: int = 0,
+                    loop_needs_visited: bool = True,
                     checkpoint_path: str | None = None,
                     progress_every: int = 200) -> SearchResult:
     """Beam search + Go-Explore coverage — the general solver for ALL level types.
@@ -234,10 +235,15 @@ def coverage_search(world: int = 1, stage: int = 1, *, beam_width: int = 48,
                     continue
                 c = cell(sim.ram)
                 x = int(info.get("x_pos", 0))
-                # loop-prune: a sharp BACKWARD x-jump within the same area is a maze
-                # loop-checkpoint teleport (8-4 page 16 -> 12). Kill it like a death so the
-                # beam stops re-running the loop and must find a clean (non-looping) crossing.
-                if loop_back_px and c[0] == node.area and x < node.x_max - loop_back_px:
+                # loop-prune: a sharp BACKWARD x-jump within the same area is usually a maze
+                # loop-checkpoint teleport (8-4 page 16 -> 12). Kill it so the beam stops re-running
+                # the loop. BUT a backward jump that lands in a NEW (unvisited) cell can be a real
+                # pipe/area entry whose destination shares the area byte (2-2-class) — those must
+                # SURVIVE. So (loop_needs_visited, default) only prune when the landing cell was
+                # already visited (a genuine loop). Pass loop_needs_visited=False for the old
+                # blanket prune.
+                if (loop_back_px and c[0] == node.area and x < node.x_max - loop_back_px
+                        and (c in visited or not loop_needs_visited)):
                     continue
                 novel = c not in visited
                 if novel:
@@ -321,7 +327,7 @@ def area_search(world: int, stage: int, *, start_prefix: list[int] | None = None
                 max_depth: int = 4000, max_x: int | None = None, actions=None,
                 forbid_keys=None,
                 time_budget_s: float = 600.0, tile: int = 16, seed: int = 0,
-                stuck_cap: int = 70, cov_bonus: float = 50.0,
+                stuck_cap: int = 70, cov_bonus: float = 50.0, x_jump_px: int = 0,
                 checkpoint_path: str | None = None, progress_every: int = 50):
     """Per-AREA curriculum solver (the 8-4 / maze-castle unblock).
 
@@ -387,9 +393,16 @@ def area_search(world: int, stage: int, *, start_prefix: list[int] | None = None
         for snap, path, x_max, stuck, nov in beam:
             for a in range(n_actions):
                 sim.restore(snap)
+                prev_x = mario_level_x(sim.ram)   # for the x_jump (hidden-pipe) signal
                 info, done = sim.run_chunk(a, chunk_frames)
                 nodes += 1
-                if transitioned(info, sim.ram):   # flag / real pipe entry / stage / new room
+                # x_jump_px>0: a large BACKWARD jump landing in an UNVISITED cell is a real
+                # pipe/area entry whose destination shares the area bytes (2-2-class), which the
+                # plain transitioned() (area-key/$06DE/stage) cannot see (gym fast-forwards it).
+                # A jump back into a VISITED cell is the maze LOOP (8-4 page16->12) — NOT success.
+                jumped = (x_jump_px and (prev_x - mario_level_x(sim.ram)) > x_jump_px
+                          and cell(sim.ram) not in visited)
+                if jumped or transitioned(info, sim.ram):   # flag / pipe / stage / new room / hidden-pipe jump
                     sim.close()
                     return True, path + [a], dict(info)
                 if is_death(info, done):

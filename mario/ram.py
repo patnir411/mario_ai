@@ -92,6 +92,45 @@ def pipe_entering(ram) -> bool:
     return int(ram[CHANGE_AREA_TIMER]) != 0 or int(ram[GAME_ENGINE_SUBROUTINE]) in PIPE_TRANSITION_STATES
 
 
+def real_transition(info_before: dict, ram_before, info_after: dict, ram_after,
+                    *, visited_cells=None, x_jump_px: int = 100, tile: int = 16):
+    """Decide whether a REAL area/level transition happened across ONE wrapped env.step.
+
+    THE detection-bug fix: gym_super_mario_bros runs _skip_change_area / _skip_occupied_states
+    INSIDE env.step(), fast-forwarding a pipe/area transition before live RAM is read — so the
+    transient $06DE/$000E are already cleaned up and `pipe_entering(ram_after)` is usually blind
+    (verified on 2-2, whose area-2 also keeps $0760/$0750/$075c). This combines only
+    POST-step-observable signals to catch the entry anyway, and distinguishes a real entry from a
+    maze-LOOP teleport (8-4 page16->page12) via the visited-cell check.
+
+    Returns (fired: bool, reason: str). `visited_cells`: set of cells `(area, x//tile, y//tile)`
+    already seen by the caller — if the backward-jump lands in a visited cell it's a LOOP (suppress);
+    if None, any large backward jump counts (the 2-2 / linear case).
+    """
+    if info_after.get("flag_get"):
+        return True, "flag"
+    wb, sb = info_before.get("world"), info_before.get("stage")
+    wa, sa = info_after.get("world"), info_after.get("stage")
+    if (wa, sa) != (wb, sb) and wa is not None:
+        return True, "stage"
+    if stage_key(ram_after) != stage_key(ram_before):
+        return True, "stage_ram"
+    if area_key(ram_after) != area_key(ram_before):
+        return True, "area_key"
+    if pipe_entering(ram_after):
+        return True, "pipe_live"
+    xb, xa = mario_level_x(ram_before), mario_level_x(ram_after)
+    if (xb - xa) > x_jump_px:                      # large BACKWARD jump = teleport
+        cell = (int(ram_after[AREA_NUMBER]), xa // tile, int(ram_after[MARIO_Y_ON_SCREEN]) // tile)
+        if visited_cells is None or cell not in visited_cells:
+            return True, "x_jump"                 # landed somewhere new -> pipe/area entry
+        # else: returned to a visited cell -> maze loop, NOT a transition
+    info_x = info_after.get("x_pos")               # gym `info` x_pos is the PRE-skip frame value
+    if info_x is not None and abs(int(info_x) - xa) > x_jump_px:
+        return True, "info_ram_mismatch"
+    return False, ""
+
+
 def facing(ram) -> int:
     """PlayerFacingDir ($0033): 1 = right, 2 = left. The side-pipe entry needs facing right."""
     return int(ram[FACING_DIR])
