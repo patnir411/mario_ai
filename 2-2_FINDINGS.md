@@ -59,9 +59,30 @@ The geometry makes this a few-frame needle:
 - `scripts/solve_22_entry.py` demonstrates probe-targeted scoring against an exact engine
   predicate — a template for frame-precise option search.
 
-## To actually beat 2-2 (options, not yet done)
-1. **Reverse-curriculum** from a constructed post-pipe state in area 2 (drive to the flagpole),
-   then learn/search the entry backward — same approach earmarked for 8-4.
-2. A **sub-pixel-Y swim controller** that targets the landing frame (body in row 6, `$001D→0`,
-   push right) — a dedicated frame-precise option, not blind chunk search.
-3. Import a verified route for the entry frames and distill (the route-data benchmark path).
+## Reverse-curriculum attempt (DONE — rigorous negative)
+The from-scratch reverse-curriculum solver (`scripts/solve_22_land.py`) was built and run, and the
+exact entry predicate was pinned with Codex from the disassembly:
+
+> Side-pipe entry fires when, in one `PlayerBGCollision` pass: `$000E==8`, `$001D==0`,
+> `$0033==1`, `$0086 & 0x0f != 0`, and the right side-probe tile `(Player_X+13, row(Player_Y+24))`
+> is `0x6c`. In water the SwimmingFlag `$0704=1` forces `$001D=1` at the START of every pass, so
+> `$001D==0` only ever holds on a genuine **foot-landing** frame (`LandPlyr`, later in the pass).
+> `0x6c` is **solid** to a descending Mario; `col3024` is a solid wall on rows 4–7.
+
+Three independent results prove the trigger cell is **unreachable**, so the entry is sub-pixel
+TAS / route-data only — exactly 8-4-class:
+1. **Construct-via-poke fails:** poking `$001D=0` + `$0033=1` + a `0x6c` probe and stepping fires
+   nothing — the SwimmingFlag overwrites `$001D` back to 1 before the side-pipe check (so the goal
+   state cannot even be hand-constructed; it must arise from a real landing frame).
+2. **Landing sweep fails:** 575 distinct reachable `x≥3008` near-mouth states × 243 sink/right/down
+   patterns = **139,725 cf=1 rollouts → 0 entries**.
+3. **Reachability proof:** a dedicated beam maximizing the trigger cell reached **0** states with
+   `x≥3011 AND Y∈[104,119]`. Geometric reason: for the probe to sample `col3024 row6 (0x6c)` Mario
+   needs `X∈[3011,3023]` AND `Y∈[104,119]`; but at that Y his body spans rows 6–7 and his right
+   edge hits the solid `col3024` wall (rows 4–7) → ejected back to `x≤3010`. At `x≥3011` he can
+   only be at row 5/above (probe → `0x6b`, no trigger). The only way into the trigger cell is the
+   transition itself → chicken-and-egg → unreachable from outside.
+
+**Conclusion:** 2-2's in-water side-pipe entry needs sub-pixel TAS or imported route data, the same
+as 8-4. 7-2 is the same level type. The decode, the corrected transition detector, and
+`solve_22_land.py` (reverse-curriculum harness) are the reusable artifacts.
