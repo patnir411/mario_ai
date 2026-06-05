@@ -1,8 +1,41 @@
-# 2-2 (underwater) — exit fully decoded; side-pipe entry is frame-precise (8-4-class)
+# 2-2 (underwater) — SOLVED from scratch (was a detection bug, not a hard level)
 
-**Status:** swim section solved to the exit; the final side-pipe entry is a frame-precise
-maneuver that blind action-chunk search does not compose (same class as 8-4's lava pipe-mount).
-Decode is complete and RAM/disassembly-verified (with the Codex consultant).
+**Status: SOLVED.** `data/solutions/2-2.json` solved=True; `render.replay` beat=True, flag at
+x_pos=3161; contact sheet shows underwater swim → side-pipe entry → surface area-2 → flagpole.
+38/38 tests green. The earlier "frame-precise / TAS-only" verdicts (below) were ALL WRONG — the
+root cause was a **detection bug**, not level difficulty.
+
+## The resolution (Codex consult, gpt-5.5, decisive)
+The side-pipe entry is reachable by **simply holding RIGHT** from the `data/solutions/2-2.json`
+prefix `path[:220]` (x≈2916, Y≈48): Mario sinks while drifting right and at **x=3011, Y=112 on a
+foot-landing frame** (`$001D=0`) the right side-probe `(X+13)=3024` first reaches the mouth `$6c`
+→ `$000E=2`, `$06DE=43` (SideExitPipeEntry). At x=3010 the probe is 3023 (col3008) — 1px short,
+which is the "wall." Full solve = `path[:220]` (cf8) + **81×right** (cf1) + a 17-action area-2
+beam to the flagpole, normalized to cf1.
+
+### Why every prior attempt "failed" — the gym-wrapper detection bug (GENERAL, applies to 7-2/8-4)
+`gym_super_mario_bros` runs `_skip_change_area()` / `_skip_occupied_states()` INSIDE `env.step()`
+AFTER the frame (smb_env.py ~:397). So a pipe/area transition is **fast-forwarded before you read
+live RAM**: by the time `run_chunk` returns, `$06DE`/`$000E` are back to 0 and the player has
+already jumped to the next area's coordinates. Our `pipe_entering` detector (checking RAM after the
+wrapped step) therefore **never saw the transient** — the searches DID enter the pipe many times
+(the "ejections to x≈2872" we dismissed as deaths were the post-transition area-2 spawn), we just
+threw the successes away. **Detect pipe transitions by the post-step signature** (large backward
+x-jump / `info` discontinuity) or by stepping the raw native frame, NOT by reading `$06DE`/`$000E`
+after the wrapped step. The flagpole at the end of area-2 sets `flag_get` normally, so the *final*
+success was always detectable — the bug only hid the intermediate pipe entry.
+
+### Exact mechanics (disassembly-verified, for the record)
+- Trigger (`ChkPBtm`): `$001D==0` (grounded) AND facing right (`$0033==1`) AND side-collided
+  metatile ∈ {`$6c`,`$1f`}. Right side-probe offset = `(Player_X+13, Player_Y+24)` for small Mario.
+- In water `$001D` is forced to 1 each frame by SwimmingFlag `$0704`; it reads 0 only on a real
+  foot-landing frame (LandPlyr), which runs before the side check — so a descending-right approach
+  that lands at the mouth row satisfies grounded + probe-on-`$6c` on the same frame.
+- Only one enterable tile in 2-2 (`$6c` at level-x 3024 row6); no `$1f` variant.
+
+---
+## (Superseded) prior incorrect analysis kept for the record
+The sections below concluded "frame-precise / TAS-only." They were wrong (detection bug above).
 
 ## What 2-2 is
 - One underwater area (area key `($0760,$0750)=(2,37)`), **no flagpole in the water area**.
