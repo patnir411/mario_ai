@@ -61,7 +61,7 @@ def main() -> None:
             changed, sub, info = area_search(
                 w, s, start_prefix=prefix or None, prefix_cf=8, forbid_keys=forbid,
                 beam_width=96, chunk_frames=8, cov_bonus=50.0, stuck_cap=120,
-                time_budget_s=budget, progress_every=0)
+                time_budget_s=budget, x_jump_px=120, progress_every=0)
             if not changed:
                 return None                      # no more new rooms from here
             new_prefix = prefix + sub
