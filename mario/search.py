@@ -328,6 +328,7 @@ def area_search(world: int, stage: int, *, start_prefix: list[int] | None = None
                 forbid_keys=None,
                 time_budget_s: float = 600.0, tile: int = 16, seed: int = 0,
                 stuck_cap: int = 70, cov_bonus: float = 50.0, x_jump_px: int = 0,
+                strict: bool = True,
                 checkpoint_path: str | None = None, progress_every: int = 50):
     """Per-AREA curriculum solver (the 8-4 / maze-castle unblock).
 
@@ -371,6 +372,12 @@ def area_search(world: int, stage: int, *, start_prefix: list[int] | None = None
     def transitioned(info, ram) -> bool:
         if is_success(info) or pipe_entering(ram) or stage_key(ram) != start_stage:
             return True
+        if strict:
+            # STRICT: a bare ($0760,$0750) flip is a PENDING marker (false positive), NOT entry.
+            # A real entry surfaces as the gym in-step skip teleporting Mario => info.x_pos
+            # (pre-skip) vs live-RAM x (post-skip) mismatch (down-pipe forward teleport, etc.).
+            ix = info.get("x_pos")
+            return ix is not None and abs(int(ix) - mario_level_x(ram)) > 100
         return (int(ram[AREA_NUMBER]), int(ram[AREA_POINTER])) not in forbid
 
     def cell(ram) -> tuple:

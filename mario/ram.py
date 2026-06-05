@@ -131,6 +131,40 @@ def real_transition(info_before: dict, ram_before, info_after: dict, ram_after,
     return False, ""
 
 
+def real_transition_strict(info_before: dict, ram_before, info_after: dict, ram_after,
+                           *, visited_cells=None, x_jump_px: int = 100, tile: int = 16):
+    """STRICT variant of `real_transition` — drops the bare `area_key` ($0750/$0760) signal,
+    which is a FALSE POSITIVE (Codex/disasm + ram.py docs: $0750 is a PENDING-destination marker
+    set by row-$0e objects scrolling in, NOT a pipe entry). A bare marker flip while Mario keeps
+    walking is NOT a transition. A *real* entry instead shows as one of the position/engine
+    signals below (the gym in-step skip teleports Mario, so a down-pipe entry surfaces as a large
+    info.x_pos-vs-live-RAM-x mismatch even though the area bytes also change).
+
+    Real entry iff: flag | (world,stage) change | stage byte advance | pipe_entering
+    ($06DE!=0 / $000E in {2,3}) | a backward x-jump into an UNVISITED cell (2-2-class side-pipe;
+    a VISITED cell = maze loop, suppressed) | |info.x_pos - live-RAM-x| > x_jump_px (the down-pipe
+    FORWARD teleport during the skip). Returns (fired, reason)."""
+    if info_after.get("flag_get"):
+        return True, "flag"
+    wb, sb = info_before.get("world"), info_before.get("stage")
+    wa, sa = info_after.get("world"), info_after.get("stage")
+    if (wa, sa) != (wb, sb) and wa is not None:
+        return True, "stage"
+    if stage_key(ram_after) != stage_key(ram_before):
+        return True, "stage_ram"
+    if pipe_entering(ram_after):
+        return True, "pipe_live"
+    xb, xa = mario_level_x(ram_before), mario_level_x(ram_after)
+    if (xb - xa) > x_jump_px:                       # large BACKWARD jump
+        cell = (int(ram_after[AREA_NUMBER]), xa // tile, int(ram_after[MARIO_Y_ON_SCREEN]) // tile)
+        if visited_cells is None or cell not in visited_cells:
+            return True, "x_jump"
+    info_x = info_after.get("x_pos")
+    if info_x is not None and abs(int(info_x) - xa) > x_jump_px:
+        return True, "info_ram_mismatch"           # catches the down-pipe FORWARD teleport
+    return False, ""
+
+
 def facing(ram) -> int:
     """PlayerFacingDir ($0033): 1 = right, 2 = left. The side-pipe entry needs facing right."""
     return int(ram[FACING_DIR])
