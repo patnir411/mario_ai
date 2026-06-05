@@ -337,7 +337,8 @@ def area_search(world: int, stage: int, *, start_prefix: list[int] | None = None
     Cell key includes status + a coarse x-speed bucket (admissibility: two states at the
     same tile but different powerup/velocity are physically different — don't merge them).
     """
-    from mario.ram import mario_level_x, signed, AREA_NUMBER, AREA_POINTER
+    from mario.ram import (mario_level_x, signed, AREA_NUMBER, AREA_POINTER,
+                           pipe_entering, stage_key)
     Y_ADDR, XSPD = 0x00CE, 0x0057
     sim = MarioSim(world, stage, actions=actions) if actions is not None else MarioSim(world, stage)
     n_actions = len(actions) if actions is not None else N_ACTIONS
@@ -348,14 +349,23 @@ def area_search(world: int, stage: int, *, start_prefix: list[int] | None = None
             _i, d = sim.run_chunk(a, pcf)
             if d:
                 break
-    # Area identity = (raw area $0760, area pointer $0750). $0750 is the byte that actually
-    # changes on a pipe/sub-area transition in this env ($0760 stays put) — so SUCCESS = the
-    # area KEY changes (a new room entered) or the flag.
+    # SUCCESS = a REAL room/level transition. Codex-verified semantics (vs the old $0750-only
+    # test, which false-positives because $0750 is a PENDING-destination marker, not entry):
+    #   (a) flag_get; (b) a real pipe/area entry underway (pipe_entering: $06DE!=0 / $000E in
+    #   {2,3}) — the decisive signal for flagpole-less water side-pipes (2-2/7-2); (c) the
+    #   STAGE byte advanced; (d) fallback: the ($0760,$0750) area key left the visited set
+    #   (still useful for maze castles where the pointer genuinely flips).
     start_key = (int(sim.ram[AREA_NUMBER]), int(sim.ram[AREA_POINTER]))
+    start_stage = stage_key(sim.ram)
     # forbid = rooms already visited along the chain (incl. start) so we don't "succeed" by
     # walking BACK into a prior room (the 8-4 loop returns 229->101); success needs a NEW room.
     forbid = {tuple(k) for k in (forbid_keys or [])} | {start_key}
     entry_x = mario_level_x(sim.ram)
+
+    def transitioned(info, ram) -> bool:
+        if is_success(info) or pipe_entering(ram) or stage_key(ram) != start_stage:
+            return True
+        return (int(ram[AREA_NUMBER]), int(ram[AREA_POINTER])) not in forbid
 
     def cell(ram) -> tuple:
         vx = signed(int(ram[XSPD]))
@@ -379,8 +389,7 @@ def area_search(world: int, stage: int, *, start_prefix: list[int] | None = None
                 sim.restore(snap)
                 info, done = sim.run_chunk(a, chunk_frames)
                 nodes += 1
-                cur_key = (int(sim.ram[AREA_NUMBER]), int(sim.ram[AREA_POINTER]))
-                if is_success(info) or cur_key not in forbid:   # flag OR entered a NEW room
+                if transitioned(info, sim.ram):   # flag / real pipe entry / stage / new room
                     sim.close()
                     return True, path + [a], dict(info)
                 if is_death(info, done):

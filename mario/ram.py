@@ -31,13 +31,23 @@ TILE_DATA = range(0x0500, 0x06A0)  # current on-screen tile grid in RAM
 SCREEN_IN_LEVEL = 0x071A
 
 # --- area / transition signals ------------------------------------------
-# AREA_NUMBER is the RAW gym-side area byte; entering a pipe/area transition flips it.
-# It is the primary "did I escape this room" success signal for maze castles (8-4).
-# (Note: gym's info `_area` reports ram[AREA_NUMBER] + 1, so raw 3 == logical area 4.)
+# CORRECTED transition semantics (verified by Codex against the SMB disassembly, Jun-4):
+#   * $0750 / $0751 are PENDING-DESTINATION markers (set by row-$0e objects scrolling in) —
+#     "a pipe destination is queued", NOT "Mario entered a pipe". Keying success on a bare
+#     $0750 flip gives false positives.
+#   * $0760 (AREA_NUMBER) is OFTEN STABLE across sub-area/pipe transitions — not the signal.
+#   * DECISIVE signals: a real pipe/area entry is underway when CHANGE_AREA_TIMER ($06DE) != 0
+#     OR GameEngineSubroutine ($000E) is in the pipe/transition states {2,3}; a level/stage
+#     actually ADVANCED when the STAGE byte ($075c) increments — the right completion signal
+#     for flagpole-less WATER levels (2-2/7-2 exit via a pipe -> next stage, no flag slide).
 AREA_NUMBER = 0x0760
-AREA_POINTER = 0x0750        # which area-object set is loaded
-CHANGE_AREA_TIMER = 0x06DE   # nonzero while an area/pipe transition is in progress
+AREA_POINTER = 0x0750        # PENDING area-object-set pointer (destination marker, not entry)
+CHANGE_AREA_TIMER = 0x06DE   # nonzero while an area/pipe transition is ACTUALLY in progress
+GAME_ENGINE_SUBROUTINE = 0x000E  # pipe/transition states {2,3} == real entry underway
+STAGE_NUMBER = 0x075C        # current stage-1 (increments on level complete; +1 to display)
+WORLD_NUMBER = 0x075F        # current world-1
 Y_HIGH_POS = 0x00B5          # vertical "page" of Mario's Y (stays 1 in 8-4 area-1)
+PIPE_TRANSITION_STATES = (2, 3)  # GameEngineSubroutine values during a pipe/area entry
 
 
 def mario_level_x(ram) -> int:
@@ -59,8 +69,25 @@ def area_pointer(ram) -> int:
 
 
 def area_key(ram) -> tuple:
-    """Combined area identity = (raw area, area pointer) — distinct per sub-area/room."""
+    """Combined area identity = (raw area, area pointer) — distinct per sub-area/room.
+
+    NOTE: $0750 here is a PENDING-destination marker, so this key can change BEFORE Mario
+    actually enters a pipe. For a decisive "really transitioned" test use `stage_key` +
+    `pipe_entering` instead (see corrected semantics above)."""
     return (int(ram[AREA_NUMBER]), int(ram[AREA_POINTER]))
+
+
+def stage_key(ram) -> tuple:
+    """(world, stage) as stored (0-based). Increments on a REAL level completion — the
+    correct success signal for flagpole-less water levels (2-2/7-2 exit via pipe)."""
+    return (int(ram[WORLD_NUMBER]), int(ram[STAGE_NUMBER]))
+
+
+def pipe_entering(ram) -> bool:
+    """True iff a real pipe/area entry is in progress RIGHT NOW (decisive, per disassembly):
+    ChangeAreaTimer ($06DE) nonzero OR GameEngineSubroutine ($000E) in a transition state.
+    Distinct from the $0750 pending-destination marker, which only means 'queued'."""
+    return int(ram[CHANGE_AREA_TIMER]) != 0 or int(ram[GAME_ENGINE_SUBROUTINE]) in PIPE_TRANSITION_STATES
 
 
 def signed(byte: int) -> int:
