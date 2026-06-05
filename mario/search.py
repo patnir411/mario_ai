@@ -76,11 +76,18 @@ def beam_search(world: int = 1, stage: int = 1, *, beam_width: int = 40,
                 chunk_frames: int = 8, max_depth: int = 400,
                 weights: RewardWeights = DEFAULT, seed: int = 0,
                 stuck_cap: int = 12, progress_every: int = 0,
-                start_prefix: list[int] | None = None) -> SearchResult:
+                start_prefix: list[int] | None = None,
+                value_guide=None, value_weight: float = 600.0) -> SearchResult:
     """Beam search to beat a level. With `start_prefix`, replay those chunks after reset
     and search the CONTINUATION from there (used for recovery trajectories in DAgger-lite
     dataset generation). The returned `path` is the continuation only; progress/x_start
-    are measured from the post-prefix state."""
+    are measured from the post-prefix state.
+
+    VALUE-GUIDED (DESIGN.md §10): pass a `value.ValueGuide` to add value_weight * V(s) to
+    each node's score, where V≈P(a flag-reaching continuation exists). This makes a NARROW
+    beam keep the solvable lineage and discard doomed-but-high-progress nodes at the frontier
+    edge — a shallow/narrow search then behaves like a deeper/wider one. value_weight is in
+    px-equivalent units (V in [0,1]); 600 ≈ "a doomed node is worth ~600px less progress"."""
     sim = MarioSim(world, stage)
     sim.reset(seed=seed)
     if start_prefix:
@@ -131,6 +138,9 @@ def beam_search(world: int = 1, stage: int = 1, *, beam_width: int = 40,
                 phi = global_progress(area_seq, x, area_entry_x)
                 score = state_score(info, x_start, frames, died=False,
                                     stuck=stuck, w=weights, progress=phi)
+                if value_guide is not None:        # learned solvability guidance
+                    from mario.observation import observe
+                    score += value_weight * value_guide.p(observe(sim.ram, info))
                 candidates.append(Node(sim.snapshot(), score, info,
                                        node.path + [a], area_x_max, stuck, frames,
                                        area=na, area_seq=area_seq, area_entry_x=area_entry_x))
