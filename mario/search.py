@@ -176,7 +176,7 @@ def coverage_search(world: int = 1, stage: int = 1, *, beam_width: int = 48,
                     stuck_cap: int = 48, cov_bonus: float = 50.0,
                     area_bonus: float = 0.0, ground_bonus: float = 0.0,
                     loop_back_px: int = 0, pipe_macro_chunks: int = 0,
-                    loop_needs_visited: bool = True,
+                    loop_needs_visited: bool = True, page_aware: bool = False, actions=None,
                     checkpoint_path: str | None = None,
                     progress_every: int = 200) -> SearchResult:
     """Beam search + Go-Explore coverage — the general solver for ALL level types.
@@ -192,13 +192,18 @@ def coverage_search(world: int = 1, stage: int = 1, *, beam_width: int = 48,
     cleared the Hammer-Bros gauntlet to x=3861 on 8-4). chunk_frames default 8 matches the
     teacher; keep stuck_cap generous since maze detours legitimately stall x for a while.
     """
-    from mario.ram import mario_level_x
-    AREA, Y_ADDR, FLOAT = 0x0760, 0x00CE, 0x001D
-    sim = MarioSim(world, stage)
+    from mario.ram import mario_level_x, pipe_entering
+    AREA, APTR, Y_ADDR, FLOAT = 0x0760, 0x0750, 0x00CE, 0x001D
+    PAGE_W = 1_000_000   # page-progress dominates x so ENTERING a pipe beats walking the surface
+    sim = MarioSim(world, stage, actions=actions) if actions is not None else MarioSim(world, stage)
     sim.reset(seed=seed)
 
     def cell(ram) -> tuple:
-        return (int(ram[AREA]), mario_level_x(ram) // tile, int(ram[Y_ADDR]) // tile)
+        # page_aware: include $0750 so sub-area/page transitions (8-4 down-pipes keep $0760=3 but
+        # advance $0750) are DISTINCT cells — lets the search chain THROUGH pipe entries instead of
+        # collapsing the post-pipe pages together. Off by default (linear levels don't need it).
+        base = (int(ram[AREA]), mario_level_x(ram) // tile, int(ram[Y_ADDR]) // tile)
+        return base + (int(ram[APTR]),) if page_aware else base
 
     root_info = sim.last_info
     x_start = int(root_info.get("x_pos", 0))
@@ -207,12 +212,15 @@ def coverage_search(world: int = 1, stage: int = 1, *, beam_width: int = 48,
     root.wp_idx = 0   # reuse wp_idx as cumulative novelty count along the lineage
     root.area = int(sim.ram[AREA])
     root.ground_xmax = x_start   # furthest x reached while GROUNDED (float_state==0)
+    root.aptr = int(sim.ram[APTR])   # $0750 page marker
+    root.page_seq = 0                # count of REAL pipe/page entries along the lineage
     beam = [root]
     best = root
 
-    def prog(n):   # area-FIRST (right pipe), then grounded-x (8-4 loop gate), then x
-        return (getattr(n, "area", 0), getattr(n, "ground_xmax", 0), n.x_max)
+    def prog(n):   # page-progress FIRST (entered pipes), then grounded-x, then x
+        return (getattr(n, "page_seq", 0), getattr(n, "ground_xmax", 0), n.x_max)
     nodes = 0
+    n_actions = len(actions) if actions is not None else N_ACTIONS
     t0 = time.perf_counter()
     depth = 0
 
@@ -221,7 +229,7 @@ def coverage_search(world: int = 1, stage: int = 1, *, beam_width: int = 48,
             break
         candidates: list[Node] = []
         for node in beam:
-            for a in range(N_ACTIONS):
+            for a in range(n_actions):
                 sim.restore(node.snap)
                 info, done = sim.run_chunk(a, chunk_frames)
                 nodes += 1
@@ -235,46 +243,61 @@ def coverage_search(world: int = 1, stage: int = 1, *, beam_width: int = 48,
                     continue
                 c = cell(sim.ram)
                 x = int(info.get("x_pos", 0))
-                # loop-prune: a sharp BACKWARD x-jump within the same area is usually a maze
-                # loop-checkpoint teleport (8-4 page 16 -> 12). Kill it so the beam stops re-running
-                # the loop. BUT a backward jump that lands in a NEW (unvisited) cell can be a real
-                # pipe/area entry whose destination shares the area byte (2-2-class) — those must
-                # SURVIVE. So (loop_needs_visited, default) only prune when the landing cell was
-                # already visited (a genuine loop). Pass loop_needs_visited=False for the old
-                # blanket prune.
-                if (loop_back_px and c[0] == node.area and x < node.x_max - loop_back_px
+                # page-progress: a REAL pipe/page entry = $0750 changed AND the gym in-step skip
+                # teleported Mario (info.x_pos lags live RAM x) OR a live pipe state. This is the
+                # 8-4 down-pipe signal ($0760 stays 3). A bare $0750 marker flip (no teleport) and
+                # the page-LOOPBACK (no $0750 change, just a backward x jump) are NOT entries.
+                live_x = mario_level_x(sim.ram)
+                aptr = int(sim.ram[APTR])
+                real_entry = (page_aware and aptr != node.aptr
+                              and (abs(x - live_x) > 100 or pipe_entering(sim.ram)))
+                page_seq = node.page_seq + (1 if real_entry else 0)
+                # loop-prune: a sharp BACKWARD x-jump within the same PAGE is a maze loop teleport.
+                # A real_entry resets the page (x is a fresh page coord), so never prune it.
+                if (not real_entry and loop_back_px and c[0] == node.area
+                        and x < node.x_max - loop_back_px
                         and (c in visited or not loop_needs_visited)):
                     continue
                 novel = c not in visited
                 if novel:
                     visited.add(c)
-                # a new cell counts as progress: reset the stall counter for detours
-                stuck = 0 if (x > node.x_max or novel) else node.stuck + 1
+                stuck = 0 if (x > node.x_max or novel or real_entry) else node.stuck + 1
                 if stuck > stuck_cap:
                     continue
                 novelty = node.wp_idx + (1 if novel else 0)
                 grounded = int(sim.ram[FLOAT]) == 0
                 ground_xmax = max(node.ground_xmax, x) if grounded else node.ground_xmax
-                score = (state_score(info, x_start, 0, False, stuck, DEFAULT)
+                # page-progress DOMINATES x so entering a pipe (page+1) beats walking the surface.
+                score = (page_seq * PAGE_W
+                         + state_score(info, x_start, 0, False, stuck, DEFAULT)
                          + cov_bonus * novelty
                          + area_bonus * int(sim.ram[AREA])
                          + ground_bonus * (ground_xmax - x_start))
+                # reset x_max on a real page entry (the new page has fresh x coords)
+                new_xmax = live_x if real_entry else max(node.x_max, x)
                 child = Node(sim.snapshot(), score, info, node.path + [a],
-                             max(node.x_max, x), stuck, node.frames + chunk_frames)
+                             new_xmax, stuck, node.frames + chunk_frames)
                 child.wp_idx = novelty
                 child.area = c[0]
                 child.ground_xmax = ground_xmax
+                child.aptr = aptr
+                child.page_seq = page_seq
                 candidates.append((c, child))
 
-            # pipe-entry macro: sustained DOWN in one atomic step, so a multi-chunk pipe
-            # entry completes without its mid-crouch states being pruned. Only kept if it
-            # actually changes AREA (a real pipe entry) or reaches the flag.
+            # pipe-entry macro: sustained DOWN in one atomic step (the down-pipe descent), so a
+            # multi-chunk entry completes without its mid-crouch states being pruned. Kept on a
+            # real AREA change OR (page_aware) a real page entry ($0750 change + gym-skip teleport).
             if pipe_macro_chunks:
                 sim.restore(node.snap)
                 m_done = False
                 for _ in range(pipe_macro_chunks):
                     info, m_done = sim.run_chunk(7, chunk_frames)
-                    if is_success(info) or int(sim.ram[AREA]) != node.area or m_done:
+                    live_x = mario_level_x(sim.ram)
+                    entered = (int(sim.ram[AREA]) != node.area
+                               or (page_aware and int(sim.ram[APTR]) != node.aptr
+                                   and (abs(int(info.get("x_pos", live_x)) - live_x) > 100
+                                        or pipe_entering(sim.ram))))
+                    if is_success(info) or entered or m_done:
                         break
                 if is_success(info):
                     sim.close()
@@ -282,17 +305,21 @@ def coverage_search(world: int = 1, stage: int = 1, *, beam_width: int = 48,
                         True, node.path + [7] * pipe_macro_chunks, chunk_frames, info,
                         int(info.get("x_pos", 0)), node.frames, depth, nodes,
                         time.perf_counter() - t0, beam_width, DEFAULT)
-                na = int(sim.ram[AREA])
-                if not m_done and na != node.area:        # entered a pipe → new area!
+                na = int(sim.ram[AREA]); na_ptr = int(sim.ram[APTR]); live_x = mario_level_x(sim.ram)
+                real = (na != node.area or (page_aware and na_ptr != node.aptr
+                        and (abs(int(info.get("x_pos", live_x)) - live_x) > 100 or pipe_entering(sim.ram))))
+                if not m_done and real:                   # entered a pipe → new area/page!
                     c = cell(sim.ram); x = int(info.get("x_pos", 0))
                     visited.add(c)
+                    ps = node.page_seq + 1
                     mc = Node(sim.snapshot(),
-                              state_score(info, x_start, 0, False, 0, DEFAULT)
+                              ps * PAGE_W + state_score(info, x_start, 0, False, 0, DEFAULT)
                               + cov_bonus * (node.wp_idx + 1) + area_bonus * na
                               + ground_bonus * (node.ground_xmax - x_start),
                               info, node.path + [7] * pipe_macro_chunks,
-                              max(node.x_max, x), 0, node.frames)
+                              live_x, 0, node.frames)
                     mc.wp_idx = node.wp_idx + 1; mc.area = na; mc.ground_xmax = node.ground_xmax
+                    mc.aptr = na_ptr; mc.page_seq = ps
                     candidates.append((c, mc))
         if not candidates:
             break
