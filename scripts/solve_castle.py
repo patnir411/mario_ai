@@ -23,6 +23,7 @@ GATES = {4: [(5, 0x40), (9, 0xb0)],
          7: [(4, 0xb0), (5, 0x80), (6, 0x40), (8, 0x40), (9, 0x80), (0xa, 0x40)],
          8: [(6, 0xf0), (0xb, 0xf0), (0x10, 0xf0)]}
 WGATES = GATES.get(W, [])
+MLC = lambda r: int(r[0x06D9]); MLP = lambda r: int(r[0x06DA])   # multi-loop counters (world 7)
 def GPROG(r):
     base = PAGE(r) * 256 + mario_level_x(r) % 256
     # gate-aware: at a gate page, reward being near the required Y grounded (steers the frontier
@@ -30,6 +31,8 @@ def GPROG(r):
     for gp, gy in WGATES:
         if gp - 1 <= PAGE(r) <= gp:        # approaching OR at the gate -> get to the right height
             base += max(0, 80 - abs(Y(r) - gy))
+    if W == 7:                              # 7-4 multi-loop: accumulating CORRECT checkpoints dominates
+        base += 5000 * MLC(r)
     return base
 
 sim = MarioSim(W, S); sim.reset(0)
@@ -41,7 +44,8 @@ def valid(r):
     return PAGE(r) <= 25 and 0 <= mario_level_x(r) <= 6500 and int(r[0x000E]) in (8, 4)
 
 def cell(r):
-    return (PAGE(r), mario_level_x(r) // 8, Y(r) // 12, GROUNDED(r))
+    base = (PAGE(r), mario_level_x(r) // 8, Y(r) // 12, GROUNDED(r))
+    return base + (MLC(r), MLP(r)) if W == 7 else base   # keep distinct multi-loop counter states
 
 # archive cell -> (snap, path, gprog)
 archive = {cell(sim.ram): (root, [], GPROG(sim.ram))}
