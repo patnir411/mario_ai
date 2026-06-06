@@ -120,13 +120,15 @@ def real_transition(info_before: dict, ram_before, info_after: dict, ram_after,
     if pipe_entering(ram_after):
         return True, "pipe_live"
     xb, xa = mario_level_x(ram_before), mario_level_x(ram_after)
-    if (xb - xa) > x_jump_px:                      # large BACKWARD jump = teleport
-        cell = (int(ram_after[AREA_NUMBER]), xa // tile, int(ram_after[MARIO_Y_ON_SCREEN]) // tile)
-        if visited_cells is None or cell not in visited_cells:
-            return True, "x_jump"                 # landed somewhere new -> pipe/area entry
-        # else: returned to a visited cell -> maze loop, NOT a transition
     info_x = info_after.get("x_pos")               # gym `info` x_pos is the PRE-skip frame value
-    if info_x is not None and abs(int(info_x) - xa) > x_jump_px:
+    mismatch = info_x is not None and abs(int(info_x) - xa) > x_jump_px
+    if (xb - xa) > x_jump_px:                      # large BACKWARD jump = teleport
+        # AUDIT FIX (see real_transition_strict): require the gym-skip info/RAM mismatch so the
+        # 8-4 page-LOOPBACK (backward teleport with info==live, no skip) is NOT a false x_jump.
+        cell = (int(ram_after[AREA_NUMBER]), xa // tile, int(ram_after[MARIO_Y_ON_SCREEN]) // tile)
+        if mismatch and (visited_cells is None or cell not in visited_cells):
+            return True, "x_jump"                 # landed somewhere new -> pipe/area entry
+    if mismatch:
         return True, "info_ram_mismatch"
     return False, ""
 
@@ -155,12 +157,17 @@ def real_transition_strict(info_before: dict, ram_before, info_after: dict, ram_
     if pipe_entering(ram_after):
         return True, "pipe_live"
     xb, xa = mario_level_x(ram_before), mario_level_x(ram_after)
-    if (xb - xa) > x_jump_px:                       # large BACKWARD jump
-        cell = (int(ram_after[AREA_NUMBER]), xa // tile, int(ram_after[MARIO_Y_ON_SCREEN]) // tile)
-        if visited_cells is None or cell not in visited_cells:
-            return True, "x_jump"
     info_x = info_after.get("x_pos")
-    if info_x is not None and abs(int(info_x) - xa) > x_jump_px:
+    mismatch = info_x is not None and abs(int(info_x) - xa) > x_jump_px
+    if (xb - xa) > x_jump_px:                       # large BACKWARD jump
+        # AUDIT FIX: a real pipe entry is fast-forwarded by the gym in-step skip, so `info.x_pos`
+        # (captured pre-skip) LAGS the live RAM x => a mismatch. The 8-4 page-LOOPBACK
+        # (ProcLoopCommand) teleports WITHOUT a gym skip, so info.x_pos == live x (no mismatch).
+        # Require the mismatch (+ unvisited cell) so a backward loop never false-fires as x_jump.
+        cell = (int(ram_after[AREA_NUMBER]), xa // tile, int(ram_after[MARIO_Y_ON_SCREEN]) // tile)
+        if mismatch and (visited_cells is None or cell not in visited_cells):
+            return True, "x_jump"
+    if mismatch:
         return True, "info_ram_mismatch"           # catches the down-pipe FORWARD teleport
     return False, ""
 

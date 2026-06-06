@@ -115,21 +115,24 @@ def test_11_forward_steps_do_not_fire():
 
 
 def test_loop_vs_pipe_discriminator():
-    """A large backward x-jump fires ONLY when the landing cell is unvisited (pipe), not when it
-    returns to a visited cell (maze loop)."""
+    """Audit-hardened semantics: a backward x-jump is a REAL entry only when paired with the
+    gym-skip info/RAM mismatch (info.x_pos lags the live x). The 8-4 page-LOOPBACK teleports
+    WITHOUT a gym skip (info.x_pos == live x) and must NOT fire, even into an unvisited cell."""
     sim = MarioSim(1, 1); sim.reset(seed=0)
-    info = dict(sim.last_info)
-    before = sim.ram.copy()
-    after = sim.ram.copy()
+    before = sim.ram.copy(); after = sim.ram.copy()
     after[AREA_NUMBER] = before[AREA_NUMBER]          # same area
-    # synthetic ~200px backward jump: before at page 2, after at page 1 (level-x -= 256 + nudge)
     before[0x006D] = 2; before[0x0086] = 100          # level-x = 612
     after[0x006D] = 1;  after[0x0086] = 156           # level-x = 412  (backward 200)
-    # consistent info dicts so signal (7) info_ram_mismatch doesn't fire spuriously
-    info_b = {"world": 1, "stage": 1, "x_pos": 612, "flag_get": False}
-    info_a = {"world": 1, "stage": 1, "x_pos": 412, "flag_get": False}
     landing = _cell(after)
-    fired_new, reason_new = real_transition(info_b, before, info_a, after, visited_cells=set())
-    fired_loop, _ = real_transition(info_b, before, info_a, after, visited_cells={landing})
-    assert fired_new and reason_new == "x_jump", "unvisited backward jump should fire as x_jump"
-    assert not fired_loop, "backward jump into a VISITED cell is a loop, must be suppressed"
+    # REAL entry: gym skip -> info.x_pos (pre-skip 612) lags live x (412) => mismatch.
+    info_b = {"world": 1, "stage": 1, "x_pos": 612, "flag_get": False}
+    info_real = {"world": 1, "stage": 1, "x_pos": 612, "flag_get": False}
+    fired_new, reason_new = real_transition(info_b, before, info_real, after, visited_cells=set())
+    fired_visited, _ = real_transition(info_b, before, info_real, after, visited_cells={landing})
+    # LOOPBACK: no gym skip -> info.x_pos == live x (412), no mismatch.
+    info_loop = {"world": 1, "stage": 1, "x_pos": 412, "flag_get": False}
+    fired_loop, _ = real_transition(info_b, before, info_loop, after, visited_cells=set())
+    assert fired_new and reason_new == "x_jump", "real backward entry (mismatch, unvisited) should fire"
+    assert not fired_loop, "page-loopback (no info/RAM mismatch) must NOT fire, even unvisited"
+    # a mismatch into a visited cell still counts (info_ram_mismatch); the visited check only gates x_jump
+    assert fired_visited, "a real (mismatch) teleport is still a transition even if cell seen"
