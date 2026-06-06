@@ -177,6 +177,7 @@ def coverage_search(world: int = 1, stage: int = 1, *, beam_width: int = 48,
                     area_bonus: float = 0.0, ground_bonus: float = 0.0,
                     loop_back_px: int = 0, pipe_macro_chunks: int = 0,
                     loop_needs_visited: bool = True, page_aware: bool = False, actions=None,
+                    start_prefix: list[int] | None = None, prefix_cf: int | None = None,
                     checkpoint_path: str | None = None,
                     progress_every: int = 200) -> SearchResult:
     """Beam search + Go-Explore coverage — the general solver for ALL level types.
@@ -197,6 +198,13 @@ def coverage_search(world: int = 1, stage: int = 1, *, beam_width: int = 48,
     PAGE_W = 1_000_000   # page-progress dominates x so ENTERING a pipe beats walking the surface
     sim = MarioSim(world, stage, actions=actions) if actions is not None else MarioSim(world, stage)
     sim.reset(seed=seed)
+    prefix_actions = list(start_prefix) if start_prefix else []
+    if prefix_actions:                 # replay a verified prefix (chain legs) before searching
+        pcf = prefix_cf if prefix_cf is not None else chunk_frames
+        for a in prefix_actions:
+            _i, d = sim.run_chunk(a, pcf)
+            if d:
+                break
 
     def cell(ram) -> tuple:
         # page_aware: include $0750 so sub-area/page transitions (8-4 down-pipes keep $0760=3 but
