@@ -31,8 +31,10 @@ import multiprocessing as mp
 import numpy as np
 
 from mario.buffer import FIELDS, encode_level_id, write_shard
+from mario.env import N_ACTIONS
 from mario.io import env_fingerprint, git_rev, utc_now_iso, write_json_atomic
 from mario.label import fast_label, soft_entropy
+from mario.render import replay as _replay
 from mario.search import beam_search
 
 DATA = ROOT / "data"
@@ -72,10 +74,13 @@ def _label_worker(task):
 
 
 def main() -> None:
-    world = int(sys.argv[1]) if len(sys.argv) > 1 else 1
-    stage = int(sys.argv[2]) if len(sys.argv) > 2 else 1
-    anchor_every = int(sys.argv[3]) if len(sys.argv) > 3 else ANCHOR_EVERY
-    n_perturb = int(sys.argv[4]) if len(sys.argv) > 4 else 1
+    pos = [a for a in sys.argv[1:] if not a.startswith("--")]
+    flags = {a for a in sys.argv[1:] if a.startswith("--")}
+    from_solution = "--from-solution" in flags  # backbone = cached solution (beam can't re-solve)
+    world = int(pos[0]) if len(pos) > 0 else 1
+    stage = int(pos[1]) if len(pos) > 1 else 1
+    anchor_every = int(pos[2]) if len(pos) > 2 else ANCHOR_EVERY
+    n_perturb = int(pos[3]) if len(pos) > 3 else 1
     seed = 0
     n_proc = max(1, min(11, (os.cpu_count() or 4) - 1))
     print(f"[gen_dataset] level {world}-{stage} seed={seed} procs={n_proc}")
@@ -83,7 +88,16 @@ def main() -> None:
     # 1) backbone winning path (cached — the search is deterministic, so reuse it
     #    across re-generations with different coverage settings instead of paying 250s)
     cache = DATA / "shards" / f"level-{world}-{stage}" / "backbone.json"
-    if cache.exists():
+    if from_solution:
+        sol = json.loads((DATA / "solutions" / f"{world}-{stage}.json").read_text())
+        P = sol["path"]
+        assert sol.get("chunk_frames", 8) == 8, (
+            f"--from-solution needs a cf8 solution; {world}-{stage} is cf={sol.get('chunk_frames')} "
+            f"(a cf8 generalist can't represent a frame-precise cf1 trajectory)")
+        recs = _replay(world, stage, seed, P, 8)   # confirm it solves + get flag x
+        bb_solved, bb_x = bool(recs[-1]["flag"]), int(recs[-1]["info"].get("x_pos", 0))
+        print(f"  backbone (cached solution): solved={bb_solved} len={len(P)} x={bb_x}")
+    elif cache.exists():
         c = json.loads(cache.read_text())
         P, bb_solved, bb_x = c["path"], c["solved"], c.get("x_max", 0)
         print(f"  backbone (cached): solved={bb_solved} len={len(P)}")
@@ -150,7 +164,7 @@ def main() -> None:
     # 5) manifest
     ent = np.array([r["_entropy"] for r in rows])
     src = cols["source"]
-    hist = np.bincount(cols["hard_action"].astype(int), minlength=7).tolist()
+    hist = np.bincount(cols["hard_action"].astype(int), minlength=N_ACTIONS).tolist()
     lvl_key = f"{world}-{stage}"
     manifest_path = DATA / "manifest.json"
     manifest = (json.loads(manifest_path.read_text())
