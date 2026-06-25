@@ -1,5 +1,7 @@
 # mario_ai
 
+> 🎮 **[Interactive explainer & walkthrough →](https://storage.googleapis.com/learn-mario-ai-422ee6/index.html?v=2)** — a visual, end-to-end tour of this project: the search→distill→DAgger journey, the hard-level debugging stories, and how each idea maps to an ML research interview. Made for fun, out of curiosity.
+
 A from-scratch AI that **beats and speedruns Super Mario Bros (NES)**, running entirely locally
 on an Apple-silicon Mac. It uses the emulator itself as a forward model — deterministic
 snapshot/restore over `gym-super-mario-bros` / `nes-py` — searched with beam + Go-Explore and a
