@@ -1,0 +1,8 @@
+exp_id: exp07_oracle_q_gradient
+trainer: sanity
+world: 1
+stage: 1
+chunk_frames: 8
+episodes: 1
+n_states_align: 200
+seed: 0

@@ -1,0 +1,7 @@
+# Experiment run outputs — do not commit large artifacts
+*
+!.gitignore
+!SCHEMA.md
+!bundled/
+bundled/*
+!bundled/README.md

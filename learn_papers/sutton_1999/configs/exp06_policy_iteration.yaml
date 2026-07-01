@@ -1,0 +1,15 @@
+exp_id: exp06_policy_iteration
+trainer: actor_critic
+world: 1
+stage: 1
+chunk_frames: 8
+episodes: 400
+gamma: 0.99
+lr_actor: 0.0003
+lr_critic: 0.001
+baseline: learned
+policy: linear_compatible
+policy_iteration_rounds: 5
+K: 4
+seed: 0
+eval_every: 50

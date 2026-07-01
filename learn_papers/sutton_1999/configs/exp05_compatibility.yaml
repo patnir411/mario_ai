@@ -1,0 +1,15 @@
+exp_id: exp05_compatibility
+trainer: actor_critic
+world: 1
+stage: 1
+chunk_frames: 8
+episodes: 500
+gamma: 0.99
+lr_actor: 0.0003
+lr_critic: 0.001
+baseline: learned
+policy: linear_compatible
+K: 4
+seed: 0
+n_states_align: 200
+eval_every: 100

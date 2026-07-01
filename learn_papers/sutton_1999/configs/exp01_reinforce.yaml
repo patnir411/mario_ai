@@ -1,0 +1,14 @@
+exp_id: exp01_reinforce
+trainer: reinforce
+world: 1
+stage: 1
+chunk_frames: 8
+episodes: 2000
+gamma: 0.99
+lr_actor: 0.0003
+entropy_coef: 0.01
+baseline: none
+policy: mlp
+K: 4
+seed: 0
+eval_every: 100

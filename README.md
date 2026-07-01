@@ -39,6 +39,10 @@ sequence, a passing test, and a human-readable contact-sheet PNG.
 Cached solutions live in `data/solutions/*.json` (action sequences, replayable from reset); visual
 proof in `runs/*_solved_contact.png`; full playthroughs via `scripts/stitch_solutions.py`.
 
+**Paper labs:** [`learn_papers/`](learn_papers/) — hands-on study tracks connecting classic RL papers
+to this codebase (starting with Sutton et al. 1999 policy gradients in
+[`learn_papers/sutton_1999/`](learn_papers/sutton_1999/)).
+
 ## How it works
 
 **Forward-model search.** The NES emulator is wrapped (`mario/env.py`) to expose exact

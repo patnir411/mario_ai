@@ -1,0 +1,16 @@
+exp_id: exp04_advantage_vs_return
+trainer: reinforce
+world: 1
+stage: 1
+chunk_frames: 8
+episodes: 2000
+gamma: 0.99
+lr_actor: 0.0003
+lr_critic: 0.001
+entropy_coef: 0.01
+baseline: learned
+policy: mlp
+K: 4
+seed: 0
+eval_every: 100
+# Analysis arm selected via env ARM=advantage|return
