@@ -1,0 +1,12 @@
+exp_id: exp00_sanity
+trainer: sanity
+world: 1
+stage: 1
+chunk_frames: 8
+episodes: 10
+gamma: 0.99
+seed: 0
+eval_every: 5
+log_steps: true
+baseline: none
+policy: mlp

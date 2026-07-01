@@ -1,0 +1,14 @@
+exp_id: exp08_oracle_advantage_ac
+trainer: oracle_ac
+world: 1
+stage: 1
+chunk_frames: 8
+episodes: 1000
+gamma: 0.99
+lr_actor: 0.0003
+baseline: oracle
+policy: mlp
+label_every: 4
+K: 4
+seed: 0
+eval_every: 50
