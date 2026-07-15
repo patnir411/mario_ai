@@ -9,14 +9,19 @@ is exact search (Bellman lookahead / approximate DP) over savestates, optionally
 by learned \(\tilde J\) / \(\pi\) priors; temporally extended *options* induce an SMDP
 on which the same story repeats one timescale up (whistle foresight).
 
+**Root text.** Richard Bellman, *Dynamic Programming* (Princeton, 1957) — read
+front-to-back; digest in `notes/theory/bellman-1957.md`. Everything below is later
+packaging of that spine.
+
 ---
 
 ## 0. Layer map (absolute basics → our code)
 
 | Layer | Math object | Fundamental reference | Repo object |
 |---|---|---|---|
-| 0 | Deterministic dynamics \(s'=f(s,a)\) | Bertsekas RL course §1.2 | nes-py / Stable-Retro; snapshots |
-| 1 | Finite MDP / Bellman | Sutton Ch. 3–4; Puterman Ch. 1–4 | adapter state, actions, terminals |
+| 0 | Deterministic dynamics \(s'=f(s,a)\) | Bertsekas RL course §1.2; Bellman Ch. III §4 | nes-py / Stable-Retro; snapshots |
+| 0.5 | Principle of Optimality + functional eq. | **Bellman 1957 Ch. III** | every search recurrence |
+| 1 | Finite MDP / Bellman eq. | Sutton Ch. 3–4; Puterman Ch. 1–4 | adapter state, actions, terminals |
 | 2 | Planning with known model | Sutton Ch. 8 | `beam_search`, `coverage_search` |
 | 3 | Potential \(\Phi\) | Ng–Harada–Russell ICML'99 | global progress \(\Phi\) |
 | 4 | Options → SMDP | Sutton–Precup–Singh AIJ'99; Sutton §17.2 | `mario/options.py`, meta search |
@@ -49,6 +54,41 @@ Go-Explore return.
 **Hardware corollary.** Bottleneck is CPU emulator + snapshot, not GPU. Measure with
 `bench/*` and `scripts/bench_sma4.py`; parallelize **across** processes, never inside
 one beam on Stable-Retro’s single-instance emulator.
+
+---
+
+## 1.5 Layer 0.5 — Bellman 1957 (the root)
+
+Bellman defines a **multi-stage decision process**: state \(p\), decision \(q\) selecting
+a transformation \(T_q\), policy = \(q\) as a function of state, criterion on the
+resulting trajectory. He rejects enumerative maximization over the full decision
+sequence (**curse of dimensionality**, Ch. I) in favor of **imbedding** — solve a
+*family* of problems and recover policy structure.
+
+**Principle of Optimality (Ch. III §3):**
+
+> An optimal policy has the property that whatever the initial state and initial
+> decision are, the remaining decisions must constitute an optimal policy with
+> regard to the state resulting from the first decision.
+
+Discrete deterministic transliteration (with stage return \(g\)):
+
+\[
+f_N(p)=\max_q\Bigl[g(p,q)+f_{N-1}\bigl(T_q(p)\bigr)\Bigr].
+\]
+
+**Approximation in policy space** (Ch. I / III): guess a policy \(q_0\), evaluate its
+return, improve — preferred to raw value iteration in applications; monotone when
+survival/discount factors are nonnegative. This is the ancestor of policy iteration,
+Bertsekas rollout/Newton, ExIt, and our policy-guided beam.
+
+**Dictionary.** \(p\) = savestate; \(q\) = button or option; \(T_q\) = emulator/option
+step; \(f_N\) = best \(N\)-stage return; beam = truncated DP with a pruned frontier;
+options = the same skeleton on a coarser \(p\).
+
+Full chapter digest (I–XI, inventory through Markovian decision processes):
+`notes/theory/bellman-1957.md`. Local PDF:
+`notes/theory/pdfs/dynamic programming.pdf`.
 
 ---
 
@@ -342,6 +382,8 @@ Local PDFs live in `notes/theory/pdfs/` (gitignored). Extracted text in
 
 **Read end-to-end in the 2026-07-15 pass (via `pdftotext` + chapter study):**
 
+- **Bellman, *Dynamic Programming* (1957) — entire book** (`dynamic programming.pdf`;
+  digest `bellman-1957.md`)
 - Sutton & Barto Ch. 1–4, 8, 16–17 (options + AlphaGo case material)
 - Puterman & Chan draft Ch. 1–4 + Part I preface
 - Bertsekas *Lessons from AlphaZero* (full extract chunks)

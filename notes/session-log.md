@@ -2,6 +2,19 @@
 
 Newest first. Detailed notes live under `notes/sessions/`.
 
+## 2026-07-15 — Bellman 1957 *Dynamic Programming* (front-to-back)
+
+Detailed digest: `notes/theory/bellman-1957.md` (folded into `first-principles.md` §1.5)
+
+Summary:
+- Read user-supplied `notes/theory/pdfs/dynamic programming.pdf` (365 pp., OCR)
+  end-to-end via chapter extracts.
+- Principle of Optimality + \(f_N(p)=\max_q[g+f_{N-1}(T_q(p))]\) is the root of
+  emulator search; approximation in policy space is the ancestor of “net serves
+  search”; curse of dimensionality justifies beam/coverage over tabular VI.
+- Later chapters (inventory, bottlenecks, CoV, games, Markovian DP) deepen the
+  same spine; concrete models are mostly analogies for mario_ai.
+
 ## 2026-07-15 — First-principles theory pass (textbooks + papers)
 
 Detailed note: `notes/sessions/2026-07-15-first-principles-theory.md`

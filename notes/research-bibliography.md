@@ -56,6 +56,14 @@ the cross-game Mario adapter work.
 
 These are the math backbone for the Option-SMDP + search-first stack. Local PDF
 corpus is gitignored; re-fetch with `notes/theory/fetch_corpus.py`.
+Bellman 1957 digest: `notes/theory/bellman-1957.md`.
+
+- Richard Bellman, *Dynamic Programming*, Princeton University Press, 1957.
+  - Local: `notes/theory/pdfs/dynamic programming.pdf` (user-supplied OCR scan, 365 pp.)
+  - Repo relevance: **root text** — Principle of Optimality (Ch. III §3), discrete /
+    stochastic / continuous functional equations, approximation in policy space,
+    curse of dimensionality. Read front-to-back 2026-07-15; all later MDP/RL books
+    in this list package this spine.
 
 - Richard S. Sutton, Andrew G. Barto, *Reinforcement Learning: An Introduction* (2nd ed.).
   - Free PDF: http://incompleteideas.net/book/RLbook2020.pdf

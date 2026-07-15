@@ -13,8 +13,9 @@ Extracted text (for offline reading / search) regenerates via the same script in
 
 ## Canonical free textbooks (download these first)
 
-| Priority | Work | Why it matters here | URL |
+| Priority | Work | Why it matters here | URL / local |
 |---|---|---|---|
+| 0 | **Bellman, *Dynamic Programming* (Princeton, 1957)** | Root text: Principle of Optimality, functional equations, policy-space approx., curse of dimensionality | Local: `pdfs/dynamic programming.pdf` (user-supplied). Digest: `bellman-1957.md` |
 | 1 | Sutton & Barto, *Reinforcement Learning: An Introduction* (2nd ed., 2018) | MDP, DP, planning vs learning, options (Ch. 17.2), AlphaGo case study | http://incompleteideas.net/book/RLbook2020.pdf |
 | 2 | Bertsekas, *A Course in Reinforcement Learning* (2nd ed., free PDF) | Deterministic DP, rollout, approximation in value space | https://web.mit.edu/dimitrib/www/RLCOURSECOMPLETE%202ndEDITION.pdf |
 | 3 | Bertsekas, *Lessons from AlphaZero for Optimal, MPC, and Adaptive Control* | Off-line training + on-line Newton/lookahead; why nets must not replace search | https://web.mit.edu/dimitrib/www/LessonsfromAlphazero.pdf |
@@ -34,14 +35,15 @@ Extracted text (for offline reading / search) regenerates via the same script in
 
 ## Reading order (absolute basics → our stack)
 
-0. Deterministic dynamics / shortest paths (Bertsekas RL course §1.2)
-1. Finite MDPs + Bellman (Sutton Ch. 3–4; Puterman Ch. 1–4)
-2. Planning with a known model (Sutton Ch. 8)
-3. Potential shaping (Ng et al.)
-4. Options → SMDP (Sutton–Precup–Singh; Sutton §17.2)
-5. Approximation in value space / rollout / Newton (Bertsekas *Lessons* + *Rollout*)
-6. ExIt + AlphaZero (search teaches; net guides)
-7. DAgger bounds (why standalone IL fails at death cliffs)
-8. Go-Explore (when Φ-beam detaches)
+0. **Bellman 1957 Ch. I + III** (Principle of Optimality, curse of dimensionality, policy-space approx.) — then skim II, IV; later chapters as interest
+1. Deterministic dynamics / shortest paths (Bertsekas RL course §1.2)
+2. Finite MDPs + Bellman eq. (Sutton Ch. 3–4; Puterman Ch. 1–4)
+3. Planning with a known model (Sutton Ch. 8)
+4. Potential shaping (Ng et al.)
+5. Options → SMDP (Sutton–Precup–Singh; Sutton §17.2)
+6. Approximation in value space / rollout / Newton (Bertsekas *Lessons* + *Rollout*)
+7. ExIt + AlphaZero (search teaches; net guides)
+8. DAgger bounds (why standalone IL fails at death cliffs)
+9. Go-Explore (when Φ-beam detaches)
 
-See `first-principles.md` for the synthesis mapped onto this repo.
+See `first-principles.md` for the synthesis and `bellman-1957.md` for the 1957 chapter digest.

@@ -49,6 +49,13 @@ repo mappings, and “what not to do.”
 6. Go-Explore archive+return is the theory behind coverage search and whistle
    side-routes.
 
+## Follow-up (same day) — Bellman 1957 front-to-back
+
+User supplied `notes/theory/pdfs/dynamic programming.pdf` (Bellman, Princeton 1957,
+OCR 365 pp.). Read end-to-end; durable digest `notes/theory/bellman-1957.md`;
+folded into `first-principles.md` as Layer 0.5. Reading order in
+`notes/theory/README.md` now starts with Bellman Ch. I+III.
+
 ## What did *not* change
 
 - Experimental next action remains: climb the AcquireWhistle knowledge ladder
