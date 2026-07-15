@@ -465,8 +465,11 @@ def build_sma4_whistle_rom_library(
         flags = ("whistle_acquired_1_3",)
         if "whistle_acquired_fortress" in state.flags:
             flags = flags + ("two_whistles_acquired",)
+        final = _last_sample(summary)
+        cursor = final.get("cursor")
         next_state = _state_with(
             state,
+            node=tuple(cursor) if cursor else None,
             inventory=("whistle",),
             flags=flags,
         )
@@ -508,8 +511,11 @@ def build_sma4_whistle_rom_library(
         flags = ("whistle_acquired_fortress",)
         if "whistle_acquired_1_3" in state.flags:
             flags = flags + ("two_whistles_acquired",)
+        final = _last_sample(summary)
+        cursor = final.get("cursor")
         next_state = _state_with(
             state,
+            node=tuple(cursor) if cursor else None,
             inventory=("whistle",),
             flags=flags,
         )
@@ -539,6 +545,7 @@ def build_sma4_whistle_rom_library(
             "fortress_door_entry_snapshot",
             "leaf_rehold_during_route",
             "pspeed_poke_during_fly",
+            "fortress_inventory_rehosted_to_pre_door_map",
         ),
         source="data/solutions/sma4/acquire_whistle_fortress.json",
         verification={

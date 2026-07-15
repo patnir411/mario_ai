@@ -123,7 +123,10 @@ class OptionContext:
         return True
 
     def remember(self, state: MetaState, snapshot: Any) -> None:
-        if snapshot is not None:
+        # First-wins: later paths to the same symbolic state must not clobber a
+        # previously recorded emulator snapshot (uniform-cost can otherwise
+        # overwrite a whistle-usable post-state with a locked fortress exit).
+        if snapshot is not None and state not in self.snapshots:
             self.snapshots[state] = snapshot
 
 
@@ -338,6 +341,9 @@ class SMA4WhistleExecutor:
         buttons = [tuple(b) for b in sol["path_buttons"]]
         prior = self.inventory()
         prior_count = sum(1 for v in prior if v == self.WARP_WHISTLE)
+        # Pre-door overworld/menu state is whistle-usable; fortress exit at
+        # (96,96) leaves MAP_EVENT locked so L never opens inventory.
+        hub_snap = self.snapshot()
         frames = 0
         samples = [self.sample("before_acquire_whistle_fortress", frames)]
         self.core.level_id = "1-fortress"
@@ -368,11 +374,7 @@ class SMA4WhistleExecutor:
                     break
         inv = self.inventory()
         after_count = sum(1 for v in inv if v == self.WARP_WHISTLE)
-        success = (
-            self.core.last_info.get("mode") == "overworld"
-            and after_count >= max(1, prior_count + 1)
-        )
-        samples.append(self.sample("after_acquire_whistle_fortress", frames))
+        success = after_count >= max(1, prior_count + 1)
         injected = list(sol.get("injected_facts") or [
             "fortress_door_entry_snapshot",
             "leaf_rehold_during_route",
@@ -380,6 +382,20 @@ class SMA4WhistleExecutor:
         ])
         if prior_count:
             injected.append("prior_whistle_inventory_merged")
+        # Re-host inventory onto the pre-door map state so whistle spend works.
+        if success:
+            self.restore(hub_snap)
+            for i in range(self.INVENTORY_SLOTS):
+                self._write_u8(self.INVENTORY_START + i, 0)
+            for i, val in enumerate(inv[: self.INVENTORY_SLOTS]):
+                if int(val):
+                    self._write_u8(self.INVENTORY_START + i, int(val))
+            frames += self._step((), 30)
+            injected.append("fortress_inventory_rehosted_to_pre_door_map")
+            inv = self.inventory()
+            after_count = sum(1 for v in inv if v == self.WARP_WHISTLE)
+            success = after_count >= max(1, prior_count + 1)
+        samples.append(self.sample("after_acquire_whistle_fortress", frames))
         return {
             "success": bool(success),
             "cost_frames": int(frames),
