@@ -28,15 +28,30 @@ to two `0x0C` (executor copies slots before replaying).
 | `fortress_door_entry_snapshot` | Door-area entry, not full overworld→door search |
 | `leaf_rehold_during_route` | POWERUP re-written if damage drops form |
 | `pspeed_poke_during_fly` | P-meter poke during the roof takeoff |
-| `prior_whistle_inventory_merged` | Only when chaining after 1-3 |
+| `prior_whistle_inventory_merged` | Only when chaining after another acquire |
+| `fortress_inventory_rehosted_to_pre_door_map` | Fortress exit at `(96,96)` leaves L-menu locked; inventory is copied back onto the pre-door map snapshot so whistle spend works |
 
 ## Wiring
 
-- `SMA4WhistleExecutor.acquire_whistle_fortress`
+- `SMA4WhistleExecutor.acquire_whistle_fortress` (inventory merge + rehost)
 - `build_sma4_whistle_rom_library(hand_granted=False)` exposes both acquires;
   `two_whistles_acquired` keeps a spare for `use_whistle_again`.
+- Option snapshots are first-wins (uniform-cost must not clobber a usable post-state).
 - Tests: `tests/test_acquire_whistle_fortress_solution.py` + updated
   `tests/test_meta_planner.py`.
+
+## ROM rebench (`--no-hand-grant`)
+
+| Config | greedy | uniform_cost | speedup |
+|---|---|---|---|
+| open | warpless 69000, skip=False | 13192, skip=True (`fortress→1_3→use→use→pipe→bowser`) | **5.23×** |
+| `--warpless-blocked` | stuck | 13192, skip=True | n/a |
+
+Artifacts:
+- `runs/20260715-sma4-whistle-rom-bench-two-acquire-open/report.json`
+- `runs/20260715-sma4-whistle-rom-bench-two-acquire-blocked/report.json`
+
+No `whistle_hand_granted` / `whistle_regranted_in_warp_zone`.
 
 ## Artifacts
 
@@ -50,15 +65,13 @@ to two `0x0C` (executor copies slots before replaying).
 
 ```bash
 pytest tests/test_acquire_whistle_fortress_solution.py tests/test_meta_planner.py -q
-# ROM (local):
-MARIO_AI_SMA4_ROM=... ./venv/bin/python - <<'PY'
-from pathlib import Path
-import json, pickle
-from mario.adapters import SMA4Adapter, SMA4_PSPEED_ACTIONS
-from mario.options import SMA4WhistleExecutor
-a=SMA4Adapter(actions=SMA4_PSPEED_ACTIONS, boot_target='overworld')
-ex=SMA4WhistleExecutor(a)
-print(ex.acquire_whistle_fortress()['success'], ex.inventory()[:4])
-a.close()
-PY
+MARIO_AI_SMA4_ROM=... ./venv/bin/python scripts/bench_sma4_whistle_rom.py --no-hand-grant \
+  --out runs/20260715-sma4-whistle-rom-bench-two-acquire-open
+MARIO_AI_SMA4_ROM=... ./venv/bin/python scripts/bench_sma4_whistle_rom.py --no-hand-grant --warpless-blocked \
+  --out runs/20260715-sma4-whistle-rom-bench-two-acquire-blocked
 ```
+
+## Next honesty burn
+
+Drop `fortress_inventory_rehosted_to_pre_door_map` by making the real fortress→map
+exit open the item menu (or replace door-entry with live overworld→fortress→door).

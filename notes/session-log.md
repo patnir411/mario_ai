@@ -2,19 +2,18 @@
 
 Newest first. Detailed notes live under `notes/sessions/`.
 
-## 2026-07-15 — Tier-2 `AcquireWhistle_fortress` DONE
+## 2026-07-15 — Two-acquire ROM `--no-hand-grant` W8 skip (5.23×)
 
 Detailed note: `notes/sessions/2026-07-15-acquire-whistle-fortress.md`
 
 Summary:
-- Map `(96,96)` after 1-1/1-2 clears is the real W1 Fortress; leaf via `POWERUP=3`
-  (not `POWERUP_SET`); door at `x≈1765`.
-- Route: fly to `y≤2` → wrap onto roof `x≈1826` → `UP` chest room → A/B → map
-  with `0x0C`. Solution `data/solutions/sma4/acquire_whistle_fortress.json`
-  (1018f, `replay_verified`).
-- Executor + library: stacks with `acquire_whistle_1_3` via inventory merge /
-  `two_whistles_acquired`. Fake meta-planner closes W8 skip without hand-grant.
-- Next: ROM rebench `--no-hand-grant` with both acquires; burn remaining injections.
+- `AcquireWhistle_fortress` replay-verified; fortress exit locks L-menu → inventory
+  rehosted onto pre-door map (injected fact recorded).
+- ROM open: greedy 69000 warpless / UC 13192 skip = **5.23×**
+  (`runs/20260715-sma4-whistle-rom-bench-two-acquire-open/`).
+- ROM blocked: greedy stuck / UC still skips
+  (`runs/20260715-sma4-whistle-rom-bench-two-acquire-blocked/`).
+- No hand-grant or warp-zone regrant. Next: burn fortress rehost / door-entry injections.
 
 ## 2026-07-15 — Fortress path blocker + whistle regrant removed
 
