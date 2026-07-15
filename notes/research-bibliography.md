@@ -65,6 +65,14 @@ Bellman 1957 digest: `notes/theory/bellman-1957.md`.
     curse of dimensionality. Read front-to-back 2026-07-15; all later MDP/RL books
     in this list package this spine.
 
+- *The Bhagavad-Gita* (*The Song Celestial*), tr. Sir Edwin Arnold (1900);
+  Project Gutenberg EBook #2388.
+  - Local: `notes/theory/pdfs/gutenberg bhagavad gita.pdf`
+  - PG: https://www.gutenberg.org/ebooks/2388
+  - Repo relevance: read front-to-back for universal agency truths and research ethos;
+    **not** a source of MDP theorems. Adversarial bridge (Keep/Kill analogies, revised
+    thesis): `notes/theory/gita-and-first-principles.md`.
+
 - Richard S. Sutton, Andrew G. Barto, *Reinforcement Learning: An Introduction* (2nd ed.).
   - Free PDF: http://incompleteideas.net/book/RLbook2020.pdf
   - Repo relevance: finite MDPs (Ch. 3), DP (Ch. 4), planning with models (Ch. 8),

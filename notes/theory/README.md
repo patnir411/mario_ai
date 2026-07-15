@@ -46,4 +46,12 @@ Extracted text (for offline reading / search) regenerates via the same script in
 8. DAgger bounds (why standalone IL fails at death cliffs)
 9. Go-Explore (when Φ-beam detaches)
 
-See `first-principles.md` for the synthesis and `bellman-1957.md` for the 1957 chapter digest.
+See `first-principles.md` for the engineering synthesis, `bellman-1957.md` for the 1957
+chapter digest, and `gita-and-first-principles.md` for the Bhagavad-Gita reading
+(universal truths + adversarial Keep/Kill of analogies + revised thesis).
+
+## Contemplative / universal (user-supplied)
+
+| Work | Local | Note |
+|---|---|---|
+| *The Song Celestial* (Bhagavad-Gita), tr. Sir Edwin Arnold — Project Gutenberg #2388 | `pdfs/gutenberg bhagavad gita.pdf` | Read front-to-back; **not** a substitute for the math. Bridge note refuses false isomorphisms and keeps researcher-ethos residue. |

@@ -2,6 +2,20 @@
 
 Newest first. Detailed notes live under `notes/sessions/`.
 
+## 2026-07-15 — Bhagavad-Gita (Arnold) + adversarial synthesis
+
+Detailed note: `notes/theory/gita-and-first-principles.md`
+
+Summary:
+- Read Gutenberg Arnold *Song Celestial* end-to-end (18 chapters); extracted full text.
+- Universal truths: fruit vs act, false renunciation, desire as anti-epistemic,
+  equanimity as trainable, own-task fidelity, proxy-piety — without forcing theology
+  into algorithms.
+- Devil’s advocate: almost all Gita↔DP isomorphisms **Kill**ed; Keep Bellman
+  policy-space approx. (credit Bellman); Transform = experimenter proxy-hygiene.
+- Same pass wounded our own thesis (Newton/Option completeness/“meta-intelligence”
+  inflation); wrote narrower defensible thesis. Experimental next action unchanged.
+
 ## 2026-07-15 — Bellman 1957 *Dynamic Programming* (front-to-back)
 
 Detailed digest: `notes/theory/bellman-1957.md` (folded into `first-principles.md` §1.5)

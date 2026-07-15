@@ -4,14 +4,21 @@
 > This note is a **synthesis from those sources**, mapped onto this repo — not a
 > substitute for the books. Last research pass: 2026-07-15.
 
-**One sentence.** With a deterministic, resettable emulator, the justified architecture
-is exact search (Bellman lookahead / approximate DP) over savestates, optionally guided
-by learned \(\tilde J\) / \(\pi\) priors; temporally extended *options* induce an SMDP
-on which the same story repeats one timescale up (whistle foresight).
+**One sentence (engineering).** Under a deterministic, snapshot-resettable emulator
+contract, the reliable closed-loop solver is model-based search over savestates,
+optionally accelerated by learned priors; replay-verified temporally extended
+executors + non-myopic execute-to-observe search handle consumable/gated structure
+(whistles). Learned policies are secondary while \(f\) is cheap and exact.
 
-**Root text.** Richard Bellman, *Dynamic Programming* (Princeton, 1957) — read
-front-to-back; digest in `notes/theory/bellman-1957.md`. Everything below is later
-packaging of that spine.
+**Narrower after adversarial review (2026-07-15).** Do not assert Option-SMDP
+completeness, Bellman optimality of beam, Newton identity of current code, or
+“meta-intelligence” as theorems until multi-time models, explicit
+\(\langle\mathcal{I},\pi,\beta\rangle\), and ROM-complete costs exist. See
+`gita-and-first-principles.md` §5.
+
+**Root math text.** Richard Bellman, *Dynamic Programming* (Princeton, 1957) —
+digest: `bellman-1957.md`. **Universal / adversarial bridge (Gita + stack):**
+`gita-and-first-principles.md`.
 
 ---
 
