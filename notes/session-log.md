@@ -2,6 +2,21 @@
 
 Newest first. Detailed notes live under `notes/sessions/`.
 
+## 2026-07-15 — First-principles theory pass (textbooks + papers)
+
+Detailed note: `notes/sessions/2026-07-15-first-principles-theory.md`
+Synthesis: `notes/theory/first-principles.md` · corpus: `notes/theory/README.md`
+
+Summary:
+- Downloaded/read legal free textbooks (Sutton & Barto; Bertsekas RL course,
+  Lessons from AlphaZero, Rollout; Puterman & Chan draft) and core papers
+  (options, shaping, DAgger, ExIt, AlphaZero, Go-Explore).
+- Layer stack 0→8 maps deterministic \(f\) → Bellman → planning → \(\Phi\) →
+  options/SMDP → Newton/approx DP → ExIt → IL bounds → Go-Explore onto this repo.
+- Verdict unchanged and now textbook-grounded: search solves; net accelerates;
+  options are the SMB3 object; standalone IL is secondary under death cliffs.
+- PDFs gitignored; re-fetch via `notes/theory/fetch_corpus.py`.
+
 ## 2026-07-15 — Tier-2 AcquireWhistle_1_3 + rebench without hand-grant
 
 Detailed note: `notes/sessions/2026-07-15-acquire-whistle-1-3.md`

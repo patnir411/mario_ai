@@ -1,10 +1,13 @@
 # Research Bibliography and Consolidated Field Notes
 
-Last verified: 2026-07-14.
+Last verified: 2026-07-15.
 
 This file consolidates the literature and tool references that informed the V4-V6 direction, the
 generalist-policy reassessment, the "net serves search" pivot, the small-LLM/VLM discussion, and
 the cross-game Mario adapter work.
+
+**First-principles synthesis (2026-07-15):** `notes/theory/first-principles.md`
+(corpus fetch: `notes/theory/README.md`).
 
 ## High-Level Conclusions
 
@@ -48,6 +51,43 @@ the cross-game Mario adapter work.
      learned model or generic search heuristic is meaningful.
 
 ## References
+
+### Foundational textbooks (free / author-posted)
+
+These are the math backbone for the Option-SMDP + search-first stack. Local PDF
+corpus is gitignored; re-fetch with `notes/theory/fetch_corpus.py`.
+
+- Richard S. Sutton, Andrew G. Barto, *Reinforcement Learning: An Introduction* (2nd ed.).
+  - Free PDF: http://incompleteideas.net/book/RLbook2020.pdf
+  - Repo relevance: finite MDPs (Ch. 3), DP (Ch. 4), planning with models (Ch. 8),
+    options (Ch. 17.2), AlphaGo case study (Ch. 16). Primary undergraduate/grad entry text.
+
+- Dimitri P. Bertsekas, *A Course in Reinforcement Learning* (2nd ed., Athena; free PDF).
+  - https://web.mit.edu/dimitrib/www/RLCOURSECOMPLETE%202ndEDITION.pdf
+  - Hub: https://www.mit.edu/~dimitrib/RLbook.html
+  - Repo relevance: deterministic DP, approximation in value space, rollout algorithms —
+    the cleanest statement of “on-line lookahead over a known model.”
+
+- Dimitri P. Bertsekas, *Lessons from AlphaZero for Optimal, Model Predictive, and Adaptive Control*.
+  - https://web.mit.edu/dimitrib/www/LessonsfromAlphazero.pdf
+  - Repo relevance: off-line training + on-line play; Newton view of rollout / policy
+    iteration; why a policy network alone is weaker than one lookahead/Newton step.
+
+- Dimitri P. Bertsekas, *Rollout, Policy Iteration, and Distributed Reinforcement Learning*.
+  - https://web.mit.edu/dimitrib/www/Rollout_Complete%20Book.pdf
+  - Repo relevance: fortified/truncated rollout, cost-improvement guarantees, MCTS as
+    stochastic rollout relative.
+
+- Martin L. Puterman, Timothy C. Y. Chan, *Markov Decision Processes and Reinforcement Learning*
+  (pre-publication draft chapters, personal use).
+  - https://github.com/martyput/MDP_book
+  - Repo relevance: classical MDP definitions; finite-horizon optimality of Markov
+    deterministic policies; model-based vs model-free framing.
+
+- Dimitri P. Bertsekas, abstract DP / contraction lecture notes (free).
+  - http://web.mit.edu/dimitrib/www/Abstract_DP_RL_Lecture.pdf
+  - Repo relevance: Bellman operators \(T,T_\mu\), contractive vs semicontractive
+    (goal/SSP-like) models — closest formal home for “reach the flag / World 8.”
 
 ### Mario AI, Search, and Planning
 

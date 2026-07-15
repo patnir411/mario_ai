@@ -14,5 +14,9 @@ runs/
 roms/
 *.pt
 
+# Theory PDF corpus + extracted text (re-fetch: notes/theory/fetch_corpus.py)
+notes/theory/pdfs/
+notes/theory/extracted/
+
 # OS
 .DS_Store
