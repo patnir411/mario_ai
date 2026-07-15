@@ -419,7 +419,9 @@ def build_sma4_whistle_rom_library(
             return None
         if cfg.hand_granted and not hasattr(executor, "grant_whistles"):
             return None
-        if not cfg.hand_granted and not hasattr(executor, "acquire_whistle_1_3"):
+        if not cfg.hand_granted and not (
+                hasattr(executor, "acquire_whistle_1_3")
+                and hasattr(executor, "acquire_whistle_fortress")):
             return None
         return executor
 
@@ -460,10 +462,13 @@ def build_sma4_whistle_rom_library(
         if executor is None:
             return OptionResult(False, state)
         summary = executor.acquire_whistle_1_3()
+        flags = ("whistle_acquired_1_3",)
+        if "whistle_acquired_fortress" in state.flags:
+            flags = flags + ("two_whistles_acquired",)
         next_state = _state_with(
             state,
             inventory=("whistle",),
-            flags=("whistle_acquired_1_3",),
+            flags=flags,
         )
         return OptionResult(
             success=bool(summary.get("success")),
@@ -479,7 +484,7 @@ def build_sma4_whistle_rom_library(
         id="acquire_whistle_1_3",
         kind="AcquireItem",
         precondition=lambda s: (not cfg.hand_granted) and s.world == 1
-        and not s.has_item("whistle"),
+        and "whistle_acquired_1_3" not in s.flags,
         runner=acquire_runner,
         knowledge_tier=KnowledgeTier.TIER2_BLACK_BOX_OPTION,
         cost=OptionCost(frames=2500),
@@ -494,15 +499,67 @@ def build_sma4_whistle_rom_library(
         },
     ))
 
+    def acquire_fortress_runner(state: MetaState,
+                                context: OptionContext) -> OptionResult:
+        executor = _need_executor(context)
+        if executor is None:
+            return OptionResult(False, state)
+        summary = executor.acquire_whistle_fortress()
+        flags = ("whistle_acquired_fortress",)
+        if "whistle_acquired_1_3" in state.flags:
+            flags = flags + ("two_whistles_acquired",)
+        next_state = _state_with(
+            state,
+            inventory=("whistle",),
+            flags=flags,
+        )
+        return OptionResult(
+            success=bool(summary.get("success")),
+            state=next_state,
+            cost=OptionCost(frames=int(summary.get("cost_frames", 0))),
+            exit_snapshot=executor.snapshot(),
+            info=summary,
+            observed_effect=_observed_from_summary(
+                summary, label="acquire_whistle_fortress"),
+        )
+
+    lib.add(Option(
+        id="acquire_whistle_fortress",
+        kind="AcquireItem",
+        precondition=lambda s: (not cfg.hand_granted) and s.world == 1
+        and "whistle_acquired_fortress" not in s.flags,
+        runner=acquire_fortress_runner,
+        knowledge_tier=KnowledgeTier.TIER2_BLACK_BOX_OPTION,
+        cost=OptionCost(frames=1200),
+        opaque_effect=False,
+        known_effect={
+            "inventory_add": ["whistle"], "count": 1, "source": "1-fortress",
+        },
+        injected_facts=(
+            "fortress_door_entry_snapshot",
+            "leaf_rehold_during_route",
+            "pspeed_poke_during_fly",
+        ),
+        source="data/solutions/sma4/acquire_whistle_fortress.json",
+        verification={
+            "verified": True,
+            "replay_verified": True,
+            "inventory_item": 0x0C,
+        },
+    ))
+
     def use_first_runner(state: MetaState, context: OptionContext) -> OptionResult:
         executor = _need_executor(context)
         if executor is None:
             return OptionResult(False, state)
         summary = executor.use_first_whistle()
         final = _last_sample(summary)
-        # One acquire leaves a single whistle; only the two-whistle grant (or a
-        # future second AcquireWhistle) keeps inventory stocked for use_again.
-        keep_whistle = "two_whistles_hand_granted" in state.flags
+        # Keep a spare whistle for use_again when two were granted or both
+        # AcquireWhistle options have already fired.
+        keep_whistle = (
+            "two_whistles_hand_granted" in state.flags
+            or "two_whistles_acquired" in state.flags
+        )
         next_state = _state_with(
             state,
             world=9,  # raw 8 special warp-zone map, not World 9

@@ -175,6 +175,8 @@ class SMA4WhistleExecutor:
     WARP_ZONE_WORLD_RAW = 8
     WORLD_8_RAW = 7
     ACQUIRE_WHISTLE_1_3 = Path("data/solutions/sma4/acquire_whistle_1_3.json")
+    ACQUIRE_WHISTLE_FORTRESS = Path(
+        "data/solutions/sma4/acquire_whistle_fortress.json")
 
     def __init__(self, core: Any):
         self.core = core
@@ -301,6 +303,81 @@ class SMA4WhistleExecutor:
             "entry_snapshot": str(entry),
             "knowledge_tier": int(KnowledgeTier.TIER2_BLACK_BOX_OPTION),
             "injected_facts": ["pwing_1_3_entry_snapshot"],
+        }
+
+    def acquire_whistle_fortress(
+            self,
+            solution_path: str | Path | None = None,
+            *,
+            entry_snapshot: str | Path | None = None,
+    ) -> dict:
+        """Replay verified W1 Fortress AcquireWhistle (roof → chest → map).
+
+        Restores the door-area entry snapshot.  If the live inventory already
+        holds a whistle (e.g. after ``acquire_whistle_1_3``), those slots are
+        copied onto the restored entry so the chest can stack a second ``0x0C``.
+        Leaf/pspeed are re-held during the fly (same honesty class as 1-3 P-Wing
+        entry).  Success = overworld with at least one more whistle than before.
+        """
+        sol_path = Path(solution_path or self.ACQUIRE_WHISTLE_FORTRESS)
+        sol = json.loads(sol_path.read_text())
+        entry = Path(entry_snapshot or sol.get("entry_snapshot")
+                     or "runs/sma4_cache/1-fortress_door_entry.pkl")
+        buttons = [tuple(b) for b in sol["path_buttons"]]
+        prior = self.inventory()
+        prior_count = sum(1 for v in prior if v == self.WARP_WHISTLE)
+        frames = 0
+        samples = [self.sample("before_acquire_whistle_fortress", frames)]
+        self.core.level_id = "1-fortress"
+        self.core.restore(self._load_snapshot_file(entry))
+        # Preserve any already-held whistles across the door-entry restore.
+        for i, val in enumerate(prior[: self.INVENTORY_SLOTS]):
+            if int(val):
+                self._write_u8(self.INVENTORY_START + i, int(val))
+        self._write_u8(self.core.POWERUP, 3)
+        self._write_u8(self.core.PSPEED, 127)
+        frames += self._step((), 3)
+        samples.append(self.sample("restored_fortress_door_entry", frames))
+        for bt in buttons:
+            self.core._step_buttons(bt)
+            frames += 1
+            if int(self.core.last_info.get("powerup") or 0) < 3:
+                self._write_u8(self.core.POWERUP, 3)
+        # Dual-whistle entry can finish mid-level; settle out with A/LEFT.
+        if self.core.last_info.get("mode") != "overworld":
+            for _ in range(400):
+                self.core._step_buttons(("A",))
+                frames += 1
+                if self.core.last_info.get("mode") == "overworld":
+                    break
+                self.core._step_buttons(("LEFT",))
+                frames += 1
+                if self.core.last_info.get("mode") == "overworld":
+                    break
+        inv = self.inventory()
+        after_count = sum(1 for v in inv if v == self.WARP_WHISTLE)
+        success = (
+            self.core.last_info.get("mode") == "overworld"
+            and after_count >= max(1, prior_count + 1)
+        )
+        samples.append(self.sample("after_acquire_whistle_fortress", frames))
+        injected = list(sol.get("injected_facts") or [
+            "fortress_door_entry_snapshot",
+            "leaf_rehold_during_route",
+            "pspeed_poke_during_fly",
+        ])
+        if prior_count:
+            injected.append("prior_whistle_inventory_merged")
+        return {
+            "success": bool(success),
+            "cost_frames": int(frames),
+            "samples": samples,
+            "inventory_first4": inv[:4],
+            "whistle_count": int(after_count),
+            "solution": str(sol_path),
+            "entry_snapshot": str(entry),
+            "knowledge_tier": int(KnowledgeTier.TIER2_BLACK_BOX_OPTION),
+            "injected_facts": injected,
         }
 
     def _sync_map_cursor(self, x: int, y: int) -> None:

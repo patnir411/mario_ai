@@ -135,6 +135,28 @@ class FakeWhistleExecutor:
             "injected_facts": ["pwing_1_3_entry_snapshot"],
         }
 
+    def acquire_whistle_fortress(self):
+        self.state = ("world1", "whistle_acquired_fortress")
+        return {
+            "success": True,
+            "cost_frames": 1200,
+            "samples": [{
+                "label": "after_acquire_whistle_fortress",
+                "world_raw_0_indexed": 0,
+                "world_normalized": 1,
+                "cursor": [96, 96],
+                "mode": "overworld",
+                "inventory_first4": [0x0C, 0x0C, 0, 0],
+            }],
+            "inventory_first4": [0x0C, 0x0C, 0, 0],
+            "whistle_count": 2,
+            "injected_facts": [
+                "fortress_door_entry_snapshot",
+                "leaf_rehold_during_route",
+                "pspeed_poke_during_fly",
+            ],
+        }
+
     def use_first_whistle(self):
         self.state = ("warp_zone", "1_4")
         return {
@@ -203,8 +225,8 @@ def test_rom_whistle_library_discovers_effects_with_resettable_executor():
     assert res.total_cost.frames == 6600
 
 
-def test_rom_whistle_library_uses_acquire_whistle_when_not_hand_granted():
-    """One AcquireWhistle cannot complete the two-whistle W8 skip without regrant."""
+def test_rom_whistle_library_uses_two_acquires_when_not_hand_granted():
+    """1-3 + fortress AcquireWhistle options close the two-whistle W8 skip."""
     executor = FakeWhistleExecutor()
     start = MetaState(world=1, node=(32, 64))
     context = OptionContext(executor=executor, snapshots={start: executor.snapshot()})
@@ -215,16 +237,18 @@ def test_rom_whistle_library_uses_acquire_whistle_when_not_hand_granted():
         lib, start, _goal, max_tier=KnowledgeTier.TIER2_BLACK_BOX_OPTION,
         context=context)
 
-    # Honest: acquire_1_3 yields one whistle; after use_whistle inventory is empty,
-    # so use_whistle_again is unavailable and the W8 skip cannot close.
-    assert not res.found
-    assert "use_whistle_again" not in res.path
-    assert "pwing_1_3_entry_snapshot" in res.injected_facts or any(
-        "pwing_1_3_entry_snapshot" in getattr(o, "injected_facts", ())
-        for o in lib.options.values()
-    )
+    assert res.found
+    assert "acquire_whistle_1_3" in res.path
+    assert "acquire_whistle_fortress" in res.path
+    assert res.path.index("acquire_whistle_1_3") < res.path.index("use_whistle")
+    assert res.path.index("acquire_whistle_fortress") < res.path.index("use_whistle")
+    assert "use_whistle_again" in res.path
     assert "whistle_hand_granted" not in res.injected_facts
     assert "whistle_regranted_in_warp_zone" not in res.injected_facts
+    assert "fortress_door_entry_snapshot" in res.injected_facts or any(
+        "fortress_door_entry_snapshot" in getattr(o, "injected_facts", ())
+        for o in lib.options.values()
+    )
 
 
 def test_sma4_mode_classifier_handles_warp_zone_and_world8_maps():

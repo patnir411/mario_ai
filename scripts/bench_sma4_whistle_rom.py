@@ -120,14 +120,15 @@ def run_benchmark(cfg: SMA4WhistleROMConfig, *,
             "warpless_blocked": cfg.warpless_blocked,
             "hand_granted": cfg.hand_granted,
             "acquire_whistle_1_3": not cfg.hand_granted,
+            "acquire_whistle_fortress": not cfg.hand_granted,
             "max_tier": int(max_tier),
             "note": (
                 "whistle spend and warp-zone navigation are ROM-backed; "
                 "warpless advance and Bowser are symbolic stand-ins; "
                 "hand_granted=True supplies two inventory whistles (no warp-zone "
                 "re-grant); hand_granted=False uses Tier-2 acquire_whistle_1_3 "
-                "(one whistle) — World-8 skip needs a second AcquireWhistle "
-                "(fortress path still blocked after 1-2 clear)"),
+                "+ acquire_whistle_fortress (door-entry snapshot + roof/chest; "
+                "inventory merge stacks the second 0x0C)"),
         },
         "rom": {
             "game": "Super Mario Advance 4 / SMB3",
@@ -158,7 +159,7 @@ def main() -> int:
     parser.add_argument("--warpless-blocked", action="store_true",
                         help="remove symbolic warpless advance options")
     parser.add_argument("--no-hand-grant", action="store_true",
-                        help="use Tier-2 acquire_whistle_1_3 instead of RAM poke")
+                        help="use Tier-2 acquire_whistle_1_3 + fortress instead of RAM poke")
     parser.add_argument("--max-tier", type=int, default=None,
                         help="max knowledge tier (default 1, or 2 with --no-hand-grant)")
     parser.add_argument("--out", type=str, default=None,

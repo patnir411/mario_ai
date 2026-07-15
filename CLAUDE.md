@@ -21,7 +21,7 @@
 | V4 multi-world | TODO | — |
 | V5 value+speed | TODO | — |
 
-Current best: 1-1: beat (fr=52) net=0%; 1-2: net=0%; 1-3: net=0%; 1-4: net=0%; 2-1: net=0%; 4-1: net=0%; 4-2: net=0%; 4-4: net=0%; 8-1: net=0%; 8-2: net=0%; 8-3: net=0%. Tests: 49 passed / 0 failed. Bench: 1375.7 fps, snapshot 73.076µs, 336.9 nodes/s. _(generated 2026-07-15T17:54:54Z, 7f2ee0d-dirty)_
+Current best: 1-1: beat (fr=52) net=0%; 1-2: net=0%; 1-3: net=0%; 1-4: net=0%; 2-1: net=0%; 4-1: net=0%; 4-2: net=0%; 4-4: net=0%; 8-1: net=0%; 8-2: net=0%; 8-3: net=0%. Tests: 49 passed / 0 failed. Bench: 1375.7 fps, snapshot 73.076µs, 336.9 nodes/s. _(generated 2026-07-15T19:38:56Z, dcadf59-dirty)_
 <!-- STATUS:END -->
 
 ## Cross-game status
