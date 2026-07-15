@@ -279,30 +279,42 @@ class SMA4WhistleExecutor:
         entry = Path(entry_snapshot or sol.get("entry_snapshot")
                      or "runs/sma4_cache/1-3_pwing_entry.pkl")
         buttons = [tuple(b) for b in sol["path_buttons"]]
+        prior = self.inventory()
+        prior_count = sum(1 for v in prior if v == self.WARP_WHISTLE)
         frames = 0
         samples = [self.sample("before_acquire_whistle_1_3", frames)]
         self.core.level_id = "1-3"
         self.core.restore(self._load_snapshot_file(entry))
+        # Preserve any already-held whistles across the P-Wing entry restore
+        # (e.g. fortress acquire ran first; chest must be able to stack).
+        for i, val in enumerate(prior[: self.INVENTORY_SLOTS]):
+            if int(val):
+                self._write_u8(self.INVENTORY_START + i, int(val))
         samples.append(self.sample("restored_pwing_1_3_entry", frames))
         for bt in buttons:
             self.core._step_buttons(bt)
             frames += 1
         inv = self.inventory()
-        success = self.WARP_WHISTLE in inv
+        after_count = sum(1 for v in inv if v == self.WARP_WHISTLE)
+        success = after_count >= max(1, prior_count + 1)
         # If the recorded path stopped inside the house, finish the exit.
         if success and float(np.asarray(self.core.last_obs).mean()) > 40:
             # Already includes exit in the verified solution; no-op settle.
             frames += self._step((), 12)
         samples.append(self.sample("after_acquire_whistle_1_3", frames))
+        injected = ["pwing_1_3_entry_snapshot"]
+        if prior_count:
+            injected.append("prior_whistle_inventory_merged")
         return {
             "success": bool(success),
             "cost_frames": int(frames),
             "samples": samples,
             "inventory_first4": inv[:4],
+            "whistle_count": int(after_count),
             "solution": str(sol_path),
             "entry_snapshot": str(entry),
             "knowledge_tier": int(KnowledgeTier.TIER2_BLACK_BOX_OPTION),
-            "injected_facts": ["pwing_1_3_entry_snapshot"],
+            "injected_facts": injected,
         }
 
     def acquire_whistle_fortress(
