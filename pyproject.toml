@@ -17,12 +17,18 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+sml = ["pyboy>=2.7.0,<2.8"]
+gba = ["stable-retro==1.0.1"]
+
+[tool.setuptools]
+packages = ["mario"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
 markers = [
     "mps: tests that touch the torch MPS backend (tolerance-based, never bit-exact)",
+    "slow: opt-in integration tests that may run long or require external ROMs",
 ]
 
 # Native arm64 interpreter required (M2 Pro). Created with:

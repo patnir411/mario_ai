@@ -108,7 +108,13 @@ def build_status(results: list[dict], evals: list[dict] | None = None) -> dict:
     best: dict[str, dict] = {}
     for r in results:
         o = r.get("outcome", {})
-        lvl = f"{r['level']['world']}-{r['level']['stage']}"
+        # Cross-game key: SMB1 keeps the bare "world-stage" (back-compat); other
+        # games are namespaced "game_id:world-stage" so they never collide.
+        if not isinstance(r.get("level"), dict):
+            continue
+        gid = r.get("game_id", "smb1")
+        base = f"{r['level']['world']}-{r['level']['stage']}"
+        lvl = base if gid == "smb1" else f"{gid}:{base}"
         cand = {"completion_frac": o.get("completion_frac", 0),
                 "framerule_time": o.get("framerule_time"),
                 "beat": o.get("beat_level", False), "source_run": r["run_id"]}
@@ -122,9 +128,15 @@ def build_status(results: list[dict], evals: list[dict] | None = None) -> dict:
         elif not cur["beat"] and cand["completion_frac"] > cur["completion_frac"]:
             best[lvl] = cand
 
-    # policy evals augment current_best with a learned-policy completion_rate per level
+    # policy evals augment current_best with a learned-policy completion_rate per level.
+    # Tolerate foreign eval.json shapes (e.g. the V5 held-out generalist eval has no run_id);
+    # the spine must not crash on a new artifact format.
     for ev in evals:
+        if "run_id" not in ev or not isinstance(ev.get("levels"), dict):
+            continue
         for lvl, lv in ev.get("levels", {}).items():
+            if not isinstance(lv, dict):
+                continue
             entry = best.setdefault(lvl, {})
             entry["policy_completion_rate"] = lv.get("completion_rate")
             entry["policy_framerule"] = lv.get("median_framerule_time")

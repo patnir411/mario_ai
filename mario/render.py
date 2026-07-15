@@ -57,10 +57,9 @@ def _pick(records, n):
     return [records[i] for i in sorted(chosen)]
 
 
-def make_contact_sheet(world: int, stage: int, seed: int, path: list[int],
-                       chunk_frames: int, out_path: str | Path,
-                       cols: int = 5, rows: int = 5, scale: int = 1) -> dict:
-    records = replay(world, stage, seed, path, chunk_frames)
+def _render_sheet(records, out_path, cols, rows, scale):
+    """Lay a list of replay records into an annotated grid PNG (shared by the
+    SMB1 and adapter contact sheets)."""
     x_max_rec = max(records, key=lambda r: r["info"].get("x_pos", 0))
     x_max = x_max_rec["info"].get("x_pos", 0)
 
@@ -103,3 +102,48 @@ def make_contact_sheet(world: int, stage: int, seed: int, path: list[int],
         "died": bool(records[-1]["died"]),
         "out": str(out_path),
     }
+
+
+def make_contact_sheet(world: int, stage: int, seed: int, path: list[int],
+                       chunk_frames: int, out_path: str | Path,
+                       cols: int = 5, rows: int = 5, scale: int = 1) -> dict:
+    records = replay(world, stage, seed, path, chunk_frames)
+    return _render_sheet(records, out_path, cols, rows, scale)
+
+
+def replay_adapter(adapter, path: list[int], chunk_frames: int, *,
+                   seed: int = 0, post_clear_frames: int = 0):
+    """Adapter-generic replay; returns per-chunk records like :func:`replay`.
+
+    Works for any `GameAdapter` (SMA4/SML/...); flags use the adapter's own
+    `is_success`/`is_death`.  `post_clear_frames` keeps capturing NOOP frames
+    after success (e.g. the goal-card walkout) so the sheet shows the finish.
+    """
+    info = adapter.reset(seed=seed)
+    records = [{"frame": np.asarray(adapter.last_obs).copy(), "info": dict(info),
+                "idx": 0, "died": False, "flag": adapter.is_success(info)}]
+    done = False
+    for i, a in enumerate(path, start=1):
+        info, done = adapter.run_chunk(a, chunk_frames)
+        records.append({"frame": np.asarray(adapter.last_obs).copy(), "info": dict(info),
+                        "idx": i, "died": adapter.is_death(info, done),
+                        "flag": adapter.is_success(info)})
+        if done or adapter.is_success(info) or adapter.is_death(info, done):
+            break
+    for j in range(1, post_clear_frames + 1):
+        info, done = adapter.run_chunk(0, 1)
+        records.append({"frame": np.asarray(adapter.last_obs).copy(), "info": dict(info),
+                        "idx": len(path) + j, "died": adapter.is_death(info, done),
+                        "flag": adapter.is_success(info)})
+        if done:
+            break
+    return records
+
+
+def make_contact_sheet_adapter(adapter, path: list[int], chunk_frames: int,
+                               out_path: str | Path, *, seed: int = 0,
+                               post_clear_frames: int = 0,
+                               cols: int = 5, rows: int = 5, scale: int = 1) -> dict:
+    records = replay_adapter(adapter, path, chunk_frames, seed=seed,
+                             post_clear_frames=post_clear_frames)
+    return _render_sheet(records, out_path, cols, rows, scale)

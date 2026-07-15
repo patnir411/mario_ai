@@ -2,6 +2,21 @@
 
 Newest first. Detailed notes live under `notes/sessions/`.
 
+## 2026-07-15 — Tier-2 AcquireWhistle_1_3 + rebench without hand-grant
+
+Detailed note: `notes/sessions/2026-07-15-acquire-whistle-1-3.md`
+
+Summary:
+- Replay-verified `data/solutions/sma4/acquire_whistle_1_3.json` (2533 frames): P-Wing 1-3
+  entry → white-block duck (`0x03003D06`) → Toad house → chest opens with **B** → map exit
+  with inventory `0x0C`.
+- A0 bench already present: `bench/sma4_{step_rate,snapshot_cost}.json` (~934 fps / ~230 nodes/s).
+- ROM rebench `--no-hand-grant`: search discovers skip via `acquire_whistle_1_3` (5 hops / 12099);
+  greedy stays warpless (69000) → **5.7×**. Warpless-blocked: greedy stuck, search still skips.
+- Honesty: first whistle is Tier-2 real; P-Wing entry snapshot + second-whistle regrant + cursor
+  sync after acquire exit remain injected; warpless/Bowser symbolic.
+- Tests: `test_acquire_whistle_solution.py` + meta-planner acquire path; pytest green.
+
 ## 2026-07-14 — Bottom-up research plan (SMA4/SMB3 Option-SMDP)
 
 Detailed note: `notes/sessions/2026-07-14-bottom-up-research-plan.md`
