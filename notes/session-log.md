@@ -2,6 +2,14 @@
 
 Newest first. Detailed notes live under `notes/sessions/`.
 
+## 2026-07-15 — Next steps plan (theory → Mario AI)
+
+Detailed note: `notes/sessions/2026-07-15-next-steps-after-theory.md`
+
+Summary: Critical path = 2nd AcquireWhistle → burn injections → honest rebench →
+SMA4 Φ; accelerators/IL/world-models parked. Claim hygiene: no “meta-intelligence”
+until `injected_facts` empty. Next action unchanged (fortress whistle + drop regrant).
+
 ## 2026-07-15 — Bhagavad-Gita (Arnold) + adversarial synthesis
 
 Detailed note: `notes/theory/gita-and-first-principles.md`
