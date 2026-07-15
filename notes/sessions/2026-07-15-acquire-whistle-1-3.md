@@ -38,7 +38,7 @@ Visual proofs: `runs/20260715-acquire-whistle-e2e/{house,whistle,map_after_exit}
 |---|---|
 | First whistle from 1-3 chest (no RAM poke) | **Real** (Tier-2 option) |
 | P-Wing 1-3 entry snapshot | Injected precondition (`pwing_1_3_entry_snapshot`) until map P-Wing use is an option |
-| Second whistle in warp zone | Still Tier-1 re-grant (`whistle_regranted_in_warp_zone`) |
+| Second whistle in warp zone | **Regrant removed** (2026-07-15); needs real 2nd inventory whistle / fortress acquire |
 | MAP_CURSOR sync after AcquireWhistle exit | Technical assist — exit leaves cursor RAM off-grid so L-inventory breaks without sync to `(64,80)` / `(128,144)` |
 | Warpless / Bowser costs | Still symbolic |
 

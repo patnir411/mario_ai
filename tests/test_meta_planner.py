@@ -198,11 +198,13 @@ def test_rom_whistle_library_discovers_effects_with_resettable_executor():
     ]
     assert any(d["option"] == "select_world8_pipe" and d.get("raw_world") == 7
                for d in res.discovered_effects)
-    assert "whistle_regranted_in_warp_zone" in res.injected_facts
+    assert "whistle_regranted_in_warp_zone" not in res.injected_facts
+    assert "whistle_hand_granted" in res.injected_facts
     assert res.total_cost.frames == 6600
 
 
 def test_rom_whistle_library_uses_acquire_whistle_when_not_hand_granted():
+    """One AcquireWhistle cannot complete the two-whistle W8 skip without regrant."""
     executor = FakeWhistleExecutor()
     start = MetaState(world=1, node=(32, 64))
     context = OptionContext(executor=executor, snapshots={start: executor.snapshot()})
@@ -213,17 +215,16 @@ def test_rom_whistle_library_uses_acquire_whistle_when_not_hand_granted():
         lib, start, _goal, max_tier=KnowledgeTier.TIER2_BLACK_BOX_OPTION,
         context=context)
 
-    assert res.found
-    assert res.path == [
-        "acquire_whistle_1_3",
-        "use_whistle",
-        "use_whistle_again",
-        "select_world8_pipe",
-        "clear_bowser",
-    ]
-    assert "pwing_1_3_entry_snapshot" in res.injected_facts
+    # Honest: acquire_1_3 yields one whistle; after use_whistle inventory is empty,
+    # so use_whistle_again is unavailable and the W8 skip cannot close.
+    assert not res.found
+    assert "use_whistle_again" not in res.path
+    assert "pwing_1_3_entry_snapshot" in res.injected_facts or any(
+        "pwing_1_3_entry_snapshot" in getattr(o, "injected_facts", ())
+        for o in lib.options.values()
+    )
     assert "whistle_hand_granted" not in res.injected_facts
-    assert res.total_cost.frames == 9100
+    assert "whistle_regranted_in_warp_zone" not in res.injected_facts
 
 
 def test_sma4_mode_classifier_handles_warp_zone_and_world8_maps():

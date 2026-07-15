@@ -124,9 +124,10 @@ def run_benchmark(cfg: SMA4WhistleROMConfig, *,
             "note": (
                 "whistle spend and warp-zone navigation are ROM-backed; "
                 "warpless advance and Bowser are symbolic stand-ins; "
-                "with hand_granted=False the first whistle is the verified "
-                "Tier-2 acquire_whistle_1_3 option (second whistle still "
-                "re-granted in the warp zone)"),
+                "hand_granted=True supplies two inventory whistles (no warp-zone "
+                "re-grant); hand_granted=False uses Tier-2 acquire_whistle_1_3 "
+                "(one whistle) — World-8 skip needs a second AcquireWhistle "
+                "(fortress path still blocked after 1-2 clear)"),
         },
         "rom": {
             "game": "Super Mario Advance 4 / SMB3",

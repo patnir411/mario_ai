@@ -16,7 +16,7 @@
 | SMB1 any% / hard castles | DONE by search | 6-2 open; 6-3 false-positive |
 | SMA4 1-1 / 1-2 ClearLevel | Tier-0 replay-verified | — |
 | `AcquireWhistle_1_3` | Tier-2 replay-verified | P-Wing entry snapshot injected; MAP_CURSOR sync assist |
-| Whistle *spend* + W8 pipe | ROM-backed opaque | Second whistle still `whistle_regranted_in_warp_zone` |
+| Whistle *spend* + W8 pipe | ROM-backed opaque | Regrant **removed**; second spend needs real inventory whistle |
 | Warpless / Bowser endpoints | Symbolic costs | Inflates × ratios |
 | Theory spine | Written + adversarially narrowed | Vocabulary inflation called out |
 
@@ -49,11 +49,15 @@ optimality of beam, Newton identity of current code, “meta-intelligence.”
 
 ## 2. Critical path (do in order)
 
-### Step 1 — Second W1 `AcquireWhistle` (CURRENT next action)
+### Step 1 — Second W1 `AcquireWhistle` (IN PROGRESS)
 
 **What.** Fortress flight / hidden-door whistle as a Tier-2 (or honest Tier-3)
-replay-verified option; wire into `build_sma4_whistle_rom_library`; remove
-`whistle_regranted_in_warp_zone`.
+replay-verified option; wire into `build_sma4_whistle_rom_library`.
+
+**Partial done (2026-07-15).** `whistle_regranted_in_warp_zone` **removed**.
+Hand-grant path still closes W8 at 7.7× without regrant. Fortress entry itself
+is blocked: after 1-1/1-2 the walkable graph never reaches ~`(96,80)`; see
+`notes/sessions/2026-07-15-fortress-whistle-blocker.md`.
 
 **Theory link.** Completes the option *library* so the SMDP action set contains
 both acquires; opacity is real, not hand-granted mid-plan.
@@ -63,21 +67,20 @@ both acquires; opacity is real, not hand-granted mid-plan.
 - `data/solutions/sma4/acquire_whistle_<fortress>.json` with `solved=true`,
   `replay_verified=true`, inventory `0x0C` without RAM poke at acquire time.
 - Executor method + test (mirror `test_acquire_whistle_solution.py`).
-- Library flag `whistle_regranted_in_warp_zone=false` on the acquire path.
-- Rebench artifact under `--no-hand-grant` (and ideally `--no-regrant`).
+- `--no-hand-grant` ROM bench closes W8 without inventory poke / regrant.
 
 **Falsify / defer.** If only works with Tier-3+ RAM surgery beyond documented
 P-Wing/flight, record min knowledge tier honestly and keep a one-whistle partial
-thesis — do not fake Tier-2.
+thesis — do not fake Tier-2. (Current defer: fortress **path unlock**, not flight.)
 
 **Likely sub-tasks.**
 
-1. Confirm correct fortress / side-node entry (existing cache
-   `runs/sma4_cache/1-fortress_entry.pkl` may be the wrong room — reclassify).
-2. Power state: Raccoon / P-Wing initiation as its own small option if needed
-   (`AcquirePWing` or overworld Toad) — reduces the 1-3 P-Wing injection debt too.
-3. Flight + hidden door route → chest / whistle; exit to map with sync that does
-   not need MAP_CURSOR poke if possible (or document the assist as Tier-3).
+1. ~~Confirm correct fortress / side-node entry~~ — fortress ~`(96,80)`;
+   `1-fortress_entry.pkl` is the wrong room (sky/athletic).
+2. Find map path-bit / unlock that wiki’s “after 1-2” implies (our clears do not
+   open `LEFT` from `(128,64)`).
+3. Power state: Raccoon / P-Wing initiation as its own small option if needed.
+4. Flight + hidden door route → chest / whistle; exit to map.
 
 ---
 
@@ -181,8 +184,9 @@ From the adversarial pass — kill or narrow claims if observed:
 
 One concrete next action (matches `CLAUDE.md`):
 
-> **Build the second W1 `AcquireWhistle` (fortress flight / hidden door),
-> replay-verify it, and remove `whistle_regranted_in_warp_zone`.**
+> **Unlock or Tier-3-label a real W1 Fortress entry, then build replay-verified
+> `AcquireWhistle_fortress` so `--no-hand-grant` can close the two-whistle W8
+> skip without inventory poke.** (Regrant already removed.)
 
 ---
 

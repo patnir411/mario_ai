@@ -270,8 +270,9 @@ class SMA4WhistleROMConfig:
 
     When ``hand_granted`` is False, the first whistle comes from the verified
     Tier-2 ``acquire_whistle_1_3`` option (P-Wing 1-3 entry snapshot + white-block
-    route).  The second whistle in the warp zone is still Tier-1 re-granted until
-    a second AcquireWhistle option exists.
+    route).  The second spend uses a remaining inventory whistle (no warp-zone
+    re-grant); a second AcquireWhistle is still required for the one-whistle
+    acquire path to reach World 8.
     """
 
     world_advance_frames: int = 9000
@@ -499,11 +500,14 @@ def build_sma4_whistle_rom_library(
             return OptionResult(False, state)
         summary = executor.use_first_whistle()
         final = _last_sample(summary)
+        # One acquire leaves a single whistle; only the two-whistle grant (or a
+        # future second AcquireWhistle) keeps inventory stocked for use_again.
+        keep_whistle = "two_whistles_hand_granted" in state.flags
         next_state = _state_with(
             state,
             world=9,  # raw 8 special warp-zone map, not World 9
             node=tuple(final.get("cursor") or (64, 80)),
-            inventory=("whistle",),
+            inventory=("whistle",) if keep_whistle else (),
             flags=("warp_zone", "first_whistle_spent"),
         )
         return OptionResult(
@@ -556,7 +560,8 @@ def build_sma4_whistle_rom_library(
         runner=use_second_runner,
         knowledge_tier=KnowledgeTier.TIER1_ITEM_GIVEN,
         opaque_effect=True,
-        injected_facts=("whistle_regranted_in_warp_zone",),
+        # No inventory re-grant: second spend needs a real remaining whistle.
+        injected_facts=(),
     ))
 
     def select_runner(state: MetaState, context: OptionContext) -> OptionResult:

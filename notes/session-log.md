@@ -2,6 +2,19 @@
 
 Newest first. Detailed notes live under `notes/sessions/`.
 
+## 2026-07-15 — Fortress path blocker + whistle regrant removed
+
+Detailed note: `notes/sessions/2026-07-15-fortress-whistle-blocker.md`
+
+Summary:
+- Fortress icon ~`(96,80)` but not in the post-1-2 walk graph (natural + cached);
+  cursor poke is cosmetic (`0x03003788` stale); `LEFT` from `(128,64)` hard-blocked.
+- Removed `whistle_regranted_in_warp_zone`; second spend needs a real remaining `0x0C`.
+- Hand-grant ROM rebench: **7.7×** skip, no regrant fact
+  (`runs/20260715-sma4-whistle-rom-bench-noregrant-open/`).
+- `--no-hand-grant --warpless-blocked`: all planners `found=False` (honest one-whistle).
+- Next: unlock/label fortress entry → `AcquireWhistle_fortress`.
+
 ## 2026-07-15 — Next steps plan (theory → Mario AI)
 
 Detailed note: `notes/sessions/2026-07-15-next-steps-after-theory.md`

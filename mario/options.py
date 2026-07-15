@@ -347,13 +347,23 @@ class SMA4WhistleExecutor:
         return {"success": True, "cost_frames": frames, "samples": samples}
 
     def use_second_whistle(self) -> dict:
-        # In the hand-poked Tier-1 setup, regranting in the warp-zone state is
-        # the reproducible way to refresh the game's internal inventory menu
-        # metadata.  Real acquisition options should remove this injected fact.
+        """Spend a remaining inventory whistle in the first warp-zone map.
+
+        Requires a real ``0x0C`` already in inventory (from ``grant_whistles(2)``
+        or a second AcquireWhistle).  Does **not** RAM-poke / re-grant — that
+        injected fact was retired once the two-whistle inventory path was
+        verified without it (``runs/20260715-fortress-unlock/``).
+        """
         frames = 0
-        samples = []
-        grant = self.grant_whistles(2)
-        samples.extend(grant["samples"])
+        samples = [self.sample("before_second_whistle", frames)]
+        if self.WARP_WHISTLE not in self.inventory():
+            samples.append(self.sample("second_whistle_missing_inventory", frames))
+            return {
+                "success": False,
+                "cost_frames": frames,
+                "samples": samples,
+                "reason": "no_whistle_in_inventory",
+            }
         # AcquireWhistle can leave MAP_CURSOR off-grid so L won't open inventory.
         # Sync only to the first warp-zone cell — never to the 5-8 cell early.
         if (self._cursor_off_grid()
