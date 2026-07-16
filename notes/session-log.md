@@ -9,8 +9,8 @@ Detailed note: `notes/sessions/2026-07-15-acquire-whistle-fortress.md`
 Summary:
 - Root cause: treasure-room exit locked L-menu; rehost was a RAM workaround.
 - Fix: truncate at chest → `UP` to map → idle → hold `B` (native unlock).
-- Dropped `fortress_inventory_rehosted_to_pre_door_map` from injected facts.
-- UC still closes two-acquire W8 skip; full ROM rebench next.
+- Dropped `fortress_inventory_rehosted_to_pre_door_map`.
+- ROM rebench: **5.38×** open (`…-norehost-open/`); blocked greedy stuck / UC skips.
 
 ## 2026-07-15 — Two-acquire ROM `--no-hand-grant` W8 skip (5.23×)
 

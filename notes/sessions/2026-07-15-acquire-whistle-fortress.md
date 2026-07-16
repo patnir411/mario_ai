@@ -42,16 +42,14 @@ to two `0x0C` (executor copies slots before replaying).
 
 ## ROM rebench (`--no-hand-grant`)
 
-| Config | greedy | uniform_cost | speedup |
-|---|---|---|---|
-| open | warpless 69000, skip=False | 13192, skip=True (`fortress→1_3→use→use→pipe→bowser`) | **5.23×** |
-| `--warpless-blocked` | stuck | 13192, skip=True | n/a |
+| Config | greedy | uniform_cost | speedup | artifact |
+|---|---|---|---|---|
+| open (with rehost, superseded) | 69000 | 13192 skip | 5.23× | `…-two-acquire-open/` |
+| open **no rehost** | 69000 | 12817 skip (`1_3→fortress→use→use→pipe→bowser`) | **5.38×** | `…-norehost-open/` |
+| `--warpless-blocked` no rehost | stuck | 12817 skip | n/a | `…-norehost-blocked/` |
 
-Artifacts:
-- `runs/20260715-sma4-whistle-rom-bench-two-acquire-open/report.json`
-- `runs/20260715-sma4-whistle-rom-bench-two-acquire-blocked/report.json`
-
-No `whistle_hand_granted` / `whistle_regranted_in_warp_zone`.
+No `whistle_hand_granted` / `whistle_regranted_in_warp_zone` /
+`fortress_inventory_rehosted_to_pre_door_map`.
 
 ## Artifacts
 
@@ -75,7 +73,8 @@ MARIO_AI_SMA4_ROM=... ./venv/bin/python scripts/bench_sma4_whistle_rom.py --no-h
 
 Chest-room `UP` exit left L-menu locked; holding **B (~10–40f)** after idle unlocks
 it natively. Executor truncates the scripted path at chest open (old tail was
-mid-room wander), then `UP` → idle 200 → `B` 40. Rebench pending after this burn.
+mid-room wander), then `UP` → idle 200 → `B` 40. Rebench: **5.38×** open /
+blocked still skips (`runs/20260715-sma4-whistle-rom-bench-norehost-{open,blocked}/`).
 
 ## Next honesty burn
 
