@@ -545,7 +545,6 @@ def build_sma4_whistle_rom_library(
             "fortress_door_entry_snapshot",
             "leaf_rehold_during_route",
             "pspeed_poke_during_fly",
-            "fortress_inventory_rehosted_to_pre_door_map",
         ),
         source="data/solutions/sma4/acquire_whistle_fortress.json",
         verification={

@@ -29,11 +29,11 @@ to two `0x0C` (executor copies slots before replaying).
 | `leaf_rehold_during_route` | POWERUP re-written if damage drops form |
 | `pspeed_poke_during_fly` | P-meter poke during the roof takeoff |
 | `prior_whistle_inventory_merged` | Only when chaining after another acquire |
-| `fortress_inventory_rehosted_to_pre_door_map` | Fortress exit at `(96,96)` leaves L-menu locked; inventory is copied back onto the pre-door map snapshot so whistle spend works |
+| ~~`fortress_inventory_rehosted_to_pre_door_map`~~ | **REMOVED** — treasure-room exit now truncates at chest, `UP` to map, idle, hold `B` (native L-menu unlock) |
 
 ## Wiring
 
-- `SMA4WhistleExecutor.acquire_whistle_fortress` (inventory merge + rehost)
+- `SMA4WhistleExecutor.acquire_whistle_fortress` (inventory merge; chest-truncate + B-settle exit)
 - `build_sma4_whistle_rom_library(hand_granted=False)` exposes both acquires;
   `two_whistles_acquired` keeps a spare for `use_whistle_again`.
 - Option snapshots are first-wins (uniform-cost must not clobber a usable post-state).
@@ -71,7 +71,13 @@ MARIO_AI_SMA4_ROM=... ./venv/bin/python scripts/bench_sma4_whistle_rom.py --no-h
   --out runs/20260715-sma4-whistle-rom-bench-two-acquire-blocked
 ```
 
+## Rehost burn (2026-07-15 evening)
+
+Chest-room `UP` exit left L-menu locked; holding **B (~10–40f)** after idle unlocks
+it natively. Executor truncates the scripted path at chest open (old tail was
+mid-room wander), then `UP` → idle 200 → `B` 40. Rebench pending after this burn.
+
 ## Next honesty burn
 
-Drop `fortress_inventory_rehosted_to_pre_door_map` by making the real fortress→map
-exit open the item menu (or replace door-entry with live overworld→fortress→door).
+Replace `fortress_door_entry_snapshot` with live overworld→fortress→door (and/or
+drop leaf/pspeed rehold).

@@ -3392,5 +3392,11 @@
     "leaf_rehold_during_route",
     "pspeed_poke_during_fly"
   ],
-  "notes": "W1 Fortress second whistle from door snap (x=1765 leaf). Left-run+RNG fly to y<=2; wrap-fall onto roof x=1826; UP chest room; A/B; map (96,96) with 0x0C."
+  "notes": "W1 Fortress second whistle from door snap (x=1765 leaf). Left-run+RNG fly to y<=2; wrap-fall onto roof x=1826; UP chest room; A/B. Executor truncates at chest, UP-exits treasure room, idles, holds B so L-menu works on map (96,96) \u2014 no inventory rehost.",
+  "exit_settle": {
+    "up_max": 120,
+    "idle": 200,
+    "b_hold": 40,
+    "truncates_at_chest": true
+  }
 }

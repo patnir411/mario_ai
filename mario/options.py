@@ -332,7 +332,10 @@ class SMA4WhistleExecutor:
         holds a whistle (e.g. after ``acquire_whistle_1_3``), those slots are
         copied onto the restored entry so the chest can stack a second ``0x0C``.
         Leaf/pspeed are re-held during the fly (same honesty class as 1-3 P-Wing
-        entry).  Success = overworld with at least one more whistle than before.
+        entry).  After the chest, stop the scripted path, ``UP`` out of the
+        treasure room, idle, then hold ``B`` so the map accepts L-menu (native
+        settle — not an inventory rehost).  Success = overworld with at least
+        one more whistle than before and L-menu openable.
         """
         sol_path = Path(solution_path or self.ACQUIRE_WHISTLE_FORTRESS)
         sol = json.loads(sol_path.read_text())
@@ -341,9 +344,7 @@ class SMA4WhistleExecutor:
         buttons = [tuple(b) for b in sol["path_buttons"]]
         prior = self.inventory()
         prior_count = sum(1 for v in prior if v == self.WARP_WHISTLE)
-        # Pre-door overworld/menu state is whistle-usable; fortress exit at
-        # (96,96) leaves MAP_EVENT locked so L never opens inventory.
-        hub_snap = self.snapshot()
+        target_count = max(1, prior_count + 1)
         frames = 0
         samples = [self.sample("before_acquire_whistle_fortress", frames)]
         self.core.level_id = "1-fortress"
@@ -361,7 +362,17 @@ class SMA4WhistleExecutor:
             frames += 1
             if int(self.core.last_info.get("powerup") or 0) < 3:
                 self._write_u8(self.core.POWERUP, 3)
-        # Dual-whistle entry can finish mid-level; settle out with A/LEFT.
+            # Truncate at chest — the recorded tail is mid-room wander, not exit.
+            if sum(1 for v in self.inventory() if v == self.WARP_WHISTLE) >= target_count:
+                break
+        samples.append(self.sample("after_fortress_chest", frames))
+        # Treasure-room exit: UP to map, idle, B-hold unlocks L-menu.
+        if self.core.last_info.get("mode") != "overworld":
+            for _ in range(120):
+                self.core._step_buttons(("UP",))
+                frames += 1
+                if self.core.last_info.get("mode") == "overworld":
+                    break
         if self.core.last_info.get("mode") != "overworld":
             for _ in range(400):
                 self.core._step_buttons(("A",))
@@ -372,29 +383,37 @@ class SMA4WhistleExecutor:
                 frames += 1
                 if self.core.last_info.get("mode") == "overworld":
                     break
+        frames += self._step((), 200)
+        frames += self._step(("B",), 40)
+        samples.append(self.sample("after_fortress_map_settle", frames))
         inv = self.inventory()
         after_count = sum(1 for v in inv if v == self.WARP_WHISTLE)
-        success = after_count >= max(1, prior_count + 1)
-        injected = list(sol.get("injected_facts") or [
-            "fortress_door_entry_snapshot",
-            "leaf_rehold_during_route",
-            "pspeed_poke_during_fly",
-        ])
+        menu_ok = False
+        if self.core.last_info.get("mode") == "overworld":
+            snap = self.snapshot()
+            for _ in range(20):
+                self.core._step_buttons(("L",))
+                frames += 1
+                if self._read_u8(self.ITEM_MENU_OPEN):
+                    menu_ok = True
+                    break
+            self.restore(snap)
+            frames += self._step((), 2)
+        success = (
+            self.core.last_info.get("mode") == "overworld"
+            and after_count >= target_count
+            and menu_ok
+        )
+        injected = [
+            f for f in (sol.get("injected_facts") or [
+                "fortress_door_entry_snapshot",
+                "leaf_rehold_during_route",
+                "pspeed_poke_during_fly",
+            ])
+            if f != "fortress_inventory_rehosted_to_pre_door_map"
+        ]
         if prior_count:
             injected.append("prior_whistle_inventory_merged")
-        # Re-host inventory onto the pre-door map state so whistle spend works.
-        if success:
-            self.restore(hub_snap)
-            for i in range(self.INVENTORY_SLOTS):
-                self._write_u8(self.INVENTORY_START + i, 0)
-            for i, val in enumerate(inv[: self.INVENTORY_SLOTS]):
-                if int(val):
-                    self._write_u8(self.INVENTORY_START + i, int(val))
-            frames += self._step((), 30)
-            injected.append("fortress_inventory_rehosted_to_pre_door_map")
-            inv = self.inventory()
-            after_count = sum(1 for v in inv if v == self.WARP_WHISTLE)
-            success = after_count >= max(1, prior_count + 1)
         samples.append(self.sample("after_acquire_whistle_fortress", frames))
         return {
             "success": bool(success),
