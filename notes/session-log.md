@@ -2,6 +2,15 @@
 
 Newest first. Detailed notes live under `notes/sessions/`.
 
+## 2026-07-17 — Drop fortress door-entry snapshot
+
+Detailed note: `notes/sessions/2026-07-15-acquire-whistle-fortress.md`
+
+Summary:
+- Coverage prefix from leaf fortress spawn → door `x≈1705`; `LEFT+B×50` align + chest script.
+- Solution entry is now `1-fortress_pwing_leaf_entry.pkl` (~1794f).
+- Dropped `fortress_door_entry_snapshot`. ROM rebench next.
+
 ## 2026-07-15 — Burn fortress inventory rehost (B-settle exit)
 
 Detailed note: `notes/sessions/2026-07-15-acquire-whistle-fortress.md`

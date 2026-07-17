@@ -11,12 +11,10 @@ writing `POWERUP_SET` collapses the form.
 
 ## Route (SMA4-specific)
 
-1. Door snap at `x≈1765` with leaf + pspeed (`runs/sma4_cache/1-fortress_door_entry.pkl`).
-2. Left-run + RNG fly to `y≤2` near the `?` block.
-3. Alternate `RIGHT+A+B` / `RIGHT` — y wraps `0→255…` then lands on the roof
-   (`x≈1826`).
-4. `UP` → chest room; **A/B** opens the chest (`0x0C`).
-5. Exit to overworld at cursor `(96,96)`.
+1. Leaf fortress spawn `runs/sma4_cache/1-fortress_pwing_leaf_entry.pkl` (not mid-level door).
+2. Coverage prefix → door area `x≈1705` (`runs/20260717-fortress-pwing-to-door/`).
+3. `LEFT+B×50` align, then roof/chest script (same fly→UP→A/B).
+4. `UP` → map; idle + hold `B` unlocks L-menu.
 
 Prior inventory whistle merges across the door restore so 1-3 + fortress stack
 to two `0x0C` (executor copies slots before replaying).
@@ -54,9 +52,9 @@ No `whistle_hand_granted` / `whistle_regranted_in_warp_zone` /
 ## Artifacts
 
 - Solution: `data/solutions/sma4/acquire_whistle_fortress.json`
-- Entry: `runs/sma4_cache/1-fortress_door_entry.pkl`
-- Leaf start: `runs/sma4_cache/1-fortress_pwing_entry.pkl`
-- Door path search: `runs/20260715-141410-sma4_snapshot_1_fortress_pspeed/`
+- Entry: `runs/sma4_cache/1-fortress_pwing_leaf_entry.pkl`
+- Door prefix: `runs/20260717-fortress-pwing-to-door/attempt.json`
+- Parent spawn: `runs/sma4_cache/1-fortress_pwing_entry.pkl`
 - Visuals: `runs/20260715-acquire-whistle-fortress/`
 
 ## Verification
@@ -76,7 +74,13 @@ it natively. Executor truncates the scripted path at chest open (old tail was
 mid-room wander), then `UP` → idle 200 → `B` 40. Rebench: **5.38×** open /
 blocked still skips (`runs/20260715-sma4-whistle-rom-bench-norehost-{open,blocked}/`).
 
+## Door-snap burn (2026-07-17)
+
+Replaced mid-level door entry with pwing-spawn + coverage door prefix + align.
+Dropped `fortress_door_entry_snapshot`. Still injected: pwing fortress entry,
+leaf/pspeed rehold.
+
 ## Next honesty burn
 
-Replace `fortress_door_entry_snapshot` with live overworld→fortress→door (and/or
-drop leaf/pspeed rehold).
+Live overworld→`(96,96)`→enter (drop `pwing_fortress_entry_snapshot`), and/or
+drop leaf/pspeed rehold.

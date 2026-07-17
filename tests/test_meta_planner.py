@@ -151,7 +151,7 @@ class FakeWhistleExecutor:
             "inventory_first4": [0x0C, 0x0C, 0, 0],
             "whistle_count": 2,
             "injected_facts": [
-                "fortress_door_entry_snapshot",
+                "pwing_fortress_entry_snapshot",
                 "leaf_rehold_during_route",
                 "pspeed_poke_during_fly",
             ],
@@ -245,10 +245,11 @@ def test_rom_whistle_library_uses_two_acquires_when_not_hand_granted():
     assert "use_whistle_again" in res.path
     assert "whistle_hand_granted" not in res.injected_facts
     assert "whistle_regranted_in_warp_zone" not in res.injected_facts
-    assert "fortress_door_entry_snapshot" in res.injected_facts or any(
-        "fortress_door_entry_snapshot" in getattr(o, "injected_facts", ())
+    assert "pwing_fortress_entry_snapshot" in res.injected_facts or any(
+        "pwing_fortress_entry_snapshot" in getattr(o, "injected_facts", ())
         for o in lib.options.values()
     )
+    assert "fortress_door_entry_snapshot" not in res.injected_facts
 
 
 def test_sma4_mode_classifier_handles_warp_zone_and_world8_maps():

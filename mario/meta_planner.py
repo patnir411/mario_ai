@@ -542,7 +542,7 @@ def build_sma4_whistle_rom_library(
             "inventory_add": ["whistle"], "count": 1, "source": "1-fortress",
         },
         injected_facts=(
-            "fortress_door_entry_snapshot",
+            "pwing_fortress_entry_snapshot",
             "leaf_rehold_during_route",
             "pspeed_poke_during_fly",
         ),

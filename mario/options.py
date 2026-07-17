@@ -326,21 +326,20 @@ class SMA4WhistleExecutor:
             *,
             entry_snapshot: str | Path | None = None,
     ) -> dict:
-        """Replay verified W1 Fortress AcquireWhistle (roof → chest → map).
+        """Replay verified W1 Fortress AcquireWhistle (spawn → door → chest → map).
 
-        Restores the door-area entry snapshot.  If the live inventory already
-        holds a whistle (e.g. after ``acquire_whistle_1_3``), those slots are
-        copied onto the restored entry so the chest can stack a second ``0x0C``.
-        Leaf/pspeed are re-held during the fly (same honesty class as 1-3 P-Wing
-        entry).  After the chest, stop the scripted path, ``UP`` out of the
-        treasure room, idle, then hold ``B`` so the map accepts L-menu (native
-        settle — not an inventory rehost).  Success = overworld with at least
-        one more whistle than before and L-menu openable.
+        Restores the leaf fortress-spawn entry (not a mid-level door snap).  If
+        the live inventory already holds a whistle (e.g. after
+        ``acquire_whistle_1_3``), those slots are copied onto the restored entry
+        so the chest can stack a second ``0x0C``.  Leaf/pspeed are re-held during
+        the route.  After the chest, stop the scripted path, ``UP`` out of the
+        treasure room, idle, then hold ``B`` so the map accepts L-menu.  Success
+        = overworld with at least one more whistle than before and L-menu openable.
         """
         sol_path = Path(solution_path or self.ACQUIRE_WHISTLE_FORTRESS)
         sol = json.loads(sol_path.read_text())
         entry = Path(entry_snapshot or sol.get("entry_snapshot")
-                     or "runs/sma4_cache/1-fortress_door_entry.pkl")
+                     or "runs/sma4_cache/1-fortress_pwing_leaf_entry.pkl")
         buttons = [tuple(b) for b in sol["path_buttons"]]
         prior = self.inventory()
         prior_count = sum(1 for v in prior if v == self.WARP_WHISTLE)
@@ -349,20 +348,18 @@ class SMA4WhistleExecutor:
         samples = [self.sample("before_acquire_whistle_fortress", frames)]
         self.core.level_id = "1-fortress"
         self.core.restore(self._load_snapshot_file(entry))
-        # Preserve any already-held whistles across the door-entry restore.
+        # Preserve any already-held whistles across the spawn-entry restore.
         for i, val in enumerate(prior[: self.INVENTORY_SLOTS]):
             if int(val):
                 self._write_u8(self.INVENTORY_START + i, int(val))
-        self._write_u8(self.core.POWERUP, 3)
-        self._write_u8(self.core.PSPEED, 127)
-        frames += self._step((), 3)
-        samples.append(self.sample("restored_fortress_door_entry", frames))
+        # Entry snap already holds leaf/pspeed — do not extra-settle (desyncs path).
+        samples.append(self.sample("restored_fortress_pwing_entry", frames))
         for bt in buttons:
             self.core._step_buttons(bt)
             frames += 1
             if int(self.core.last_info.get("powerup") or 0) < 3:
                 self._write_u8(self.core.POWERUP, 3)
-            # Truncate at chest — the recorded tail is mid-room wander, not exit.
+            # Truncate at chest — recorded exit settle is re-applied below.
             if sum(1 for v in self.inventory() if v == self.WARP_WHISTLE) >= target_count:
                 break
         samples.append(self.sample("after_fortress_chest", frames))
@@ -406,11 +403,14 @@ class SMA4WhistleExecutor:
         )
         injected = [
             f for f in (sol.get("injected_facts") or [
-                "fortress_door_entry_snapshot",
+                "pwing_fortress_entry_snapshot",
                 "leaf_rehold_during_route",
                 "pspeed_poke_during_fly",
             ])
-            if f != "fortress_inventory_rehosted_to_pre_door_map"
+            if f not in (
+                "fortress_inventory_rehosted_to_pre_door_map",
+                "fortress_door_entry_snapshot",
+            )
         ]
         if prior_count:
             injected.append("prior_whistle_inventory_merged")

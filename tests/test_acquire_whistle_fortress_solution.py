@@ -20,10 +20,12 @@ def test_acquire_whistle_fortress_solution_schema():
     assert sol["inventory_after"][0] == 0x0C
     assert sol["n_frames"] == len(sol["path_buttons"])
     assert sol["n_frames"] > 800
-    assert Path(sol["entry_snapshot"]).name == "1-fortress_door_entry.pkl"
+    assert Path(sol["entry_snapshot"]).name == "1-fortress_pwing_leaf_entry.pkl"
     assert all(isinstance(frame, list) for frame in sol["path_buttons"][:5])
     # Roof route uses UP into the chest room; chest opens with A/B.
     assert any("UP" in frame for frame in sol["path_buttons"])
     assert any("A" in frame or "B" in frame for frame in sol["path_buttons"])
     facts = sol.get("injected_facts") or []
-    assert "fortress_door_entry_snapshot" in facts
+    assert "pwing_fortress_entry_snapshot" in facts
+    assert "fortress_door_entry_snapshot" not in facts
+    assert "fortress_inventory_rehosted_to_pre_door_map" not in facts
