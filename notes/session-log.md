@@ -9,7 +9,8 @@ Detailed note: `notes/sessions/2026-07-15-acquire-whistle-fortress.md`
 Summary:
 - Coverage prefix from leaf fortress spawn → door `x≈1705`; `LEFT+B×50` align + chest script.
 - Solution entry is now `1-fortress_pwing_leaf_entry.pkl` (~1794f).
-- Dropped `fortress_door_entry_snapshot`. ROM rebench next.
+- Dropped `fortress_door_entry_snapshot`. ROM rebench **5.18×**
+  (`runs/20260717-sma4-whistle-rom-bench-nodoor-snap-{open,blocked}/`).
 
 ## 2026-07-15 — Burn fortress inventory rehost (B-settle exit)
 

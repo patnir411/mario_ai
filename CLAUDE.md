@@ -21,7 +21,7 @@
 | V4 multi-world | TODO | — |
 | V5 value+speed | TODO | — |
 
-Current best: 1-1: beat (fr=52) net=0%; 1-2: net=0%; 1-3: net=0%; 1-4: net=0%; 2-1: net=0%; 4-1: net=0%; 4-2: net=0%; 4-4: net=0%; 8-1: net=0%; 8-2: net=0%; 8-3: net=0%. Tests: 49 passed / 0 failed. Bench: 1375.7 fps, snapshot 73.076µs, 336.9 nodes/s. _(generated 2026-07-17T05:57:43Z, d92b494-dirty)_
+Current best: 1-1: beat (fr=52) net=0%; 1-2: net=0%; 1-3: net=0%; 1-4: net=0%; 2-1: net=0%; 4-1: net=0%; 4-2: net=0%; 4-4: net=0%; 8-1: net=0%; 8-2: net=0%; 8-3: net=0%. Tests: 49 passed / 0 failed. Bench: 1375.7 fps, snapshot 73.076µs, 336.9 nodes/s. _(generated 2026-07-17T06:00:54Z, a6b51bf-dirty)_
 <!-- STATUS:END -->
 
 ## Cross-game status
@@ -76,7 +76,7 @@ Current best: 1-1: beat (fr=52) net=0%; 1-2: net=0%; 1-3: net=0%; 1-4: net=0%; 2
 - **B4 rebench without first hand-grant (superseded honesty).** Prior `--no-hand-grant` ×5.7 used warp-zone regrant for the second spend; retired below.
 - **`whistle_regranted_in_warp_zone` REMOVED.** `use_second_whistle` spends a real remaining inventory `0x0C` (no RAM poke). Hand-grant ROM bench still discovers the skip at **7.7×** (`runs/20260715-sma4-whistle-rom-bench-noregrant-open/report.json`; injected: `whistle_hand_granted` / `two_whistles_hand_granted`, **not** regrant). `--warpless-blocked` greedy stuck / search still skips. One-whistle `acquire_1_3` alone cannot close W8 (`runs/20260715-sma4-whistle-rom-bench-acquire-noregrant-blocked/report.json`, all planners `found=False`). Note: `notes/sessions/2026-07-15-fortress-whistle-blocker.md`.
 - **`AcquireWhistle_fortress` from fortress spawn (door snap dropped).** Entry `runs/sma4_cache/1-fortress_pwing_leaf_entry.pkl`; coverage prefix → door → align → roof/chest; `UP`+idle+`B` settle. Solution `data/solutions/sma4/acquire_whistle_fortress.json` (`replay_verified=true`, ~1794f). Dropped `fortress_door_entry_snapshot`. Tests: `tests/test_acquire_whistle_fortress_solution.py`.
-- **ROM `--no-hand-grant` two-acquire W8 skip DONE (no rehost).** Prior norehost open **5.38×** (`runs/20260715-sma4-whistle-rom-bench-norehost-open/report.json`). Rebench after door-snap burn pending/recorded under `…-nodoor-snap-*` when run. Injected: P-Wing 1-3 entry, pwing fortress entry, leaf/pspeed rehold, MAP_CURSOR sync; warpless/Bowser symbolic.
+- **ROM `--no-hand-grant` two-acquire W8 skip DONE (no door snap).** Open: greedy 69000 / UC 13320 = **5.18×** (`runs/20260717-sma4-whistle-rom-bench-nodoor-snap-open/report.json`). Blocked: greedy stuck / UC skips (`…-nodoor-snap-blocked/`). No `fortress_door_entry_snapshot`. Injected: P-Wing 1-3 entry, pwing fortress entry, leaf/pspeed rehold, MAP_CURSOR sync; warpless/Bowser symbolic.
 
 ## Active issues  (open only — move to changelog when resolved)
 - [ ] **6-2 is the ONLY unsolved stock level** (31/32 solved this session via `solve_all_stock.py`). beam+coverage exhausted at 1444s; it's the moving-lift/athletic level. Retry with tuned `coverage_search` knobs or `solve_castle`-style Go-Explore if pursuing 32/32. (6-3 also caches `solved=True` but is a determinism FALSE POSITIVE — replay at seed 0 dies; the dataset builder's replay gate excludes it. Re-solve at seed 0 or quarantine.)
@@ -85,7 +85,7 @@ Current best: 1-1: beat (fr=52) net=0%; 1-2: net=0%; 1-3: net=0%; 1-4: net=0%; 2
 - [ ] Specialists don't transfer single-stage→multi-stage (enemy frame-parity/start differ); only 1-1 (identical first level) transfers.
 
 ## Next action  (exactly ONE, concrete)
-**ROM-rebench `--no-hand-grant` after the door-snap burn** (± `--warpless-blocked`), confirm `fortress_door_entry_snapshot` absent from `injected_facts`, then replace `pwing_fortress_entry_snapshot` with live overworld→`(96,96)`→enter.
+**Replace `pwing_fortress_entry_snapshot` with a live overworld→`(96,96)`→enter option** (post-1-1/1-2 clear path), rebench `--no-hand-grant`, and drop that injected fact.
 
 ## Notes / gotchas  (durable facts, not status)
 - Theory spine: `notes/theory/first-principles.md`; Bellman 1957: `bellman-1957.md`; Gita + adversarial bridge: `gita-and-first-principles.md`. PDFs gitignored; `fetch_corpus.py` regenerates free math PDFs.

@@ -23,11 +23,12 @@ to two `0x0C` (executor copies slots before replaying).
 
 | Fact | Why |
 |---|---|
-| `fortress_door_entry_snapshot` | Door-area entry, not full overworld→door search |
+| `pwing_fortress_entry_snapshot` | Leaf fortress spawn entry (replaces mid-level door snap) |
 | `leaf_rehold_during_route` | POWERUP re-written if damage drops form |
 | `pspeed_poke_during_fly` | P-meter poke during the roof takeoff |
 | `prior_whistle_inventory_merged` | Only when chaining after another acquire |
-| ~~`fortress_inventory_rehosted_to_pre_door_map`~~ | **REMOVED** — treasure-room exit now truncates at chest, `UP` to map, idle, hold `B` (native L-menu unlock) |
+| ~~`fortress_door_entry_snapshot`~~ | **REMOVED** — coverage prefix from pwing spawn to door |
+| ~~`fortress_inventory_rehosted_to_pre_door_map`~~ | **REMOVED** — `B`-settle unlocks L-menu |
 
 ## Wiring
 
@@ -43,11 +44,11 @@ to two `0x0C` (executor copies slots before replaying).
 | Config | greedy | uniform_cost | speedup | artifact |
 |---|---|---|---|---|
 | open (with rehost, superseded) | 69000 | 13192 skip | 5.23× | `…-two-acquire-open/` |
-| open **no rehost** | 69000 | 12817 skip (`1_3→fortress→use→use→pipe→bowser`) | **5.38×** | `…-norehost-open/` |
-| `--warpless-blocked` no rehost | stuck | 12817 skip | n/a | `…-norehost-blocked/` |
+| open **no rehost** | 69000 | 12817 skip | 5.38× | `…-norehost-open/` |
+| open **no door snap** | 69000 | 13320 skip (`1_3→fortress→…`) | **5.18×** | `…-nodoor-snap-open/` |
+| `--warpless-blocked` no door snap | stuck | 13320 skip | n/a | `…-nodoor-snap-blocked/` |
 
-No `whistle_hand_granted` / `whistle_regranted_in_warp_zone` /
-`fortress_inventory_rehosted_to_pre_door_map`.
+No `whistle_hand_granted` / regrant / rehost / `fortress_door_entry_snapshot`.
 
 ## Artifacts
 
