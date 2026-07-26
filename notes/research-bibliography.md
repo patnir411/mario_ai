@@ -1,54 +1,77 @@
 # Research Bibliography and Consolidated Field Notes
 
-Last verified: 2026-07-15.
+Last verified: 2026-07-25.
 
 This file consolidates the literature and tool references that informed the V4-V6 direction, the
 generalist-policy reassessment, the "net serves search" pivot, the small-LLM/VLM discussion, and
-the cross-game Mario adapter work.
+the cross-game Mario adapter work. The July 25 refresh prioritizes methods that
+map to falsifiable experiments in this repository rather than architecture
+fashion: completeness-safe policy-guided search, unknown-option planning,
+variable-duration actions, selective policy handoff, and reliable evaluation.
 
 **First-principles synthesis (2026-07-15):** `notes/theory/first-principles.md`
 (corpus fetch: `notes/theory/README.md`).
 
 ## High-Level Conclusions
 
-1. Search is the solver when an exact, resettable emulator is available.
-   - The Mario AI competition history and AlphaZero/ExIt lineage both support this: use planning
-     over the true dynamics, then optionally distill or use learned priors to guide the search.
+1. Search is the current solver when an exact, resettable emulator is available.
+   - Mario AI competition history and planning/distillation work motivate this design; they do
+     not prove that search is universally superior to learning.
    - In this repo, the working version is beam/coverage search over emulator snapshots, with learned
      policy/value models treated as accelerators rather than standalone replacements.
 
-2. A zero-shot generalist Mario controller from the fixed stock level set is not a realistic near-term
-   expectation.
+2. A zero-shot generalist Mario controller is not supported by the fixed stock-level evidence and
+   is not the current near-term deliverable.
    - The ICLR 2025 data-scaling paper that motivated "dozens of environments might be enough" is
      about robotic manipulation, not long-horizon platformer level generalization.
    - Procgen/CoinRun is the closer analogue: hundreds of levels can still overfit, and robust
      train-to-test transfer usually needs far more procedural diversity than the 32 stock SMB levels.
 
-3. Offline BC/DAgger is useful, but the repo's experiments show the standalone policy track hits a
-   real closed-loop-control wall.
+3. Offline BC/DAgger is useful, but the repo's tested recipes hit a local standalone
+   closed-loop-control wall.
    - V4/V5/V6 results: structured/entity policies improve validation accuracy and can run/jump, but
      still fail closed-loop completion as generalists; DAgger helped some train levels and did not
-     produce held-out transfer.
-   - Practical direction: keep per-level cached search solutions/rescue; use learned priors inside
-     search where they reduce nodes without losing completeness.
+   produce held-out transfer. This is an empirical boundary for the tested data,
+   architectures, and teacher—not a universal impossibility result for imitation learning.
+   - Practical direction: keep per-level cached search solutions/rescue; use
+     learned priors inside search where they reduce nodes without reducing
+     matched-baseline solve rate or primitive-action support. The bounded beam
+     baseline is itself incomplete; PHS-style completeness guarantees require a
+     separate algorithm.
 
 4. Reverse-curriculum RL remains the serious option if we ever need a reactive standalone specialist.
    - RFCL/Go-Explore/RLPD/BBF support the recipe: start near successful states, use saved demos and
      online rollouts, and use modern stability/plasticity fixes.
-   - The local `scripts/rc_rl.py` experiment was directionally positive near the end of 1-1 but not
-     production-grade.
+   - The historical partial-suffix observation has no preserved report or checkpoint. The
+     hardened `scripts/rc_rl.py` is therefore an experimental driver, not a positive result.
 
 5. Small LLMs/VLMs are not recommended for real-time low-level Mario control in this project.
    - Pretrained language can help some sequential decision problems, but the gains appear to come
      from sequence bias/initialization rather than natural-language knowledge.
-   - VideoGameBench shows frontier VLMs still fail badly at direct real-time game completion, and
-     local small models are too slow or too weak for frame-level control.
+   - VideoGameBench reports very limited direct game completion for the evaluated VLM agents.
+     No local model-size/latency sweep was run here, so repository-specific thresholds remain
+     unmeasured.
    - Better use: offline subgoal proposal, code/RE assistance, or level-generation tooling.
 
 6. Cross-game Mario should stay adapter-first.
    - Stable-Retro/mGBA and PyBoy give usable emulator APIs and savestates.
    - Each game still needs per-game boot, RAM, action, terminal, and progress semantics before any
-     learned model or generic search heuristic is meaningful.
+   learned model or generic search heuristic is meaningful.
+
+7. The next learned-search experiment should preserve action support.
+   - Hard top-k pruning produced the repo's only positive learned-search result and
+     its clearest failure. Policy-Guided Heuristic Search (PHS), Levin-style search,
+     or an explicit nonzero primitive-action fallback is a stronger target than
+     simply training a larger prior.
+   - Evaluate node/time reduction only subject to solve-rate non-inferiority.
+
+8. The SMA4 whistle work is currently a segmented unknown-option prototype.
+   - It has replay-verified low-level segments and a useful execute-to-observe
+     planning scaffold, but cached entry restores, state writes, symbolic endpoints,
+     and an intentionally nonexploring greedy baseline prevent an end-to-end
+     Option-SMDP claim.
+   - The next gate is exact predecessor-exit composition plus a full intervention
+     and state-abstraction audit.
 
 ## References
 
@@ -130,7 +153,10 @@ Bellman 1957 digest: `notes/theory/bellman-1957.md`.
 - Andrew Y. Ng, Daishi Harada, Stuart Russell, "Policy invariance under reward transformations:
   Theory and application to reward shaping", ICML 1999.
   - PDF: https://people.eecs.berkeley.edu/~pabbeel/cs287-fa09/readings/NgHaradaRussell-shaping-ICML1999.pdf
-  - Repo relevance: supports potential-based/global-progress shaping logic.
+  - Repo relevance: defines potential-based reward shaping. The repo's current
+    \(\Phi\) is a potential-inspired search ranking unless it is actually applied
+    as \(\gamma\Phi(s')-\Phi(s)\); do not claim the policy-invariance theorem for
+    the ranking heuristic.
 
 - Thomas Anthony, Zheng Tian, David Barber, "Thinking Fast and Slow with Deep Learning and Tree
   Search" (Expert Iteration), NeurIPS 2017.
@@ -168,6 +194,118 @@ Bellman 1957 digest: `notes/theory/bellman-1957.md`.
   - Repo relevance: background for beam-style heuristic search, though our search is emulator-state
     planning rather than sequence decoding.
 
+### 2026-07-25 actionable planning and evaluation refresh
+
+Ranked by direct value to the current codebase:
+
+1. **Laurent Orseau, Levi H. S. Lelis, "Policy-Guided Heuristic Search with
+   Guarantees" (AAAI 2021).**
+   - AAAI: https://ojs.aaai.org/index.php/AAAI/article/view/17469
+   - arXiv: https://arxiv.org/abs/2103.11505
+   - Repo experiment: replace incomplete fixed `policy_topk` beam pruning with
+     PHS/PHS*- or Levin-style best-first enumeration using cumulative path
+     probability and a progress/goal heuristic. Compare expansions, wall time,
+     and solve rate against plain beam, soft log-prior beam, and hard top-k.
+   - Why first: it directly targets this project's metric—single-agent
+     deterministic search effort—and supplies search-loss guarantees tied to
+     both policy and heuristic quality.
+
+2. **Jake Tuero, Michael Buro, Levi H. S. Lelis, "Subgoal-Guided Policy
+   Heuristic Search with Learned Subgoals" (ICML 2025).**
+   - PMLR: https://proceedings.mlr.press/v267/tuero25a.html
+   - arXiv: https://arxiv.org/abs/2506.07255
+   - Repo experiment: retain failed 6-2/fortress search trees and learn
+     subgoal-conditioned policies/heuristics from both successful and failed
+     expansions instead of discarding unsuccessful runs. Start with explicit
+     RAM-derived subgoals before learning the subgoal representation.
+
+3. **Palash Chatterjee, Roni Khardon, "Improving planning and MBRL with
+   temporally-extended actions" (NeurIPS 2025).**
+   - NeurIPS: https://papers.nips.cc/paper_files/paper/2025/hash/cec445dfc292392af716e9a4fe8de99b-Abstract-Conference.html
+   - arXiv: https://arxiv.org/abs/2505.15754
+   - Repo experiment: treat hold duration as a search variable—initially
+     \(\{1,2,4,8,16\}\) frames, then a bandit-selected range—rather than the
+     current coarse split between fixed cf8 exploration and cf1 specialists.
+     Measure whether phase-sensitive 6-2/lift states become reachable at equal
+     primitive-frame and wall-clock budgets. The paper studies continuous-time
+     planning, so the Mario mapping is a hypothesis, not a transferred theorem.
+
+4. **Arthur Guez, David Silver, Peter Dayan, "Efficient Bayes-Adaptive
+   Reinforcement Learning using Sample-Based Search" (NeurIPS 2012) and
+   "Scalable and Efficient Bayes-Adaptive Reinforcement Learning" (JAIR 2013).**
+   - NeurIPS: https://proceedings.neurips.cc/paper/2012/hash/35051070e572e47d2c26c241ab88307f-Abstract.html
+   - JAIR author PDF: https://www.gatsby.ucl.ac.uk/~aguez/files/guez_jair2013.pdf
+   - Repo experiment: use a small BAMCP-style history/belief baseline on generated
+     unknown-option graphs and the SMA4 whistle instance. This is a control for
+     whether execute-to-observe uniform-cost search is solving an exploration
+     problem that benefits from an explicit posterior over option effects.
+
+5. **Surbhi Goel, Jonathan Pei, James Wang, "Learning When to Stop:
+   Selective Imitation Learning Under Arbitrary Dynamics Shift" (2026 preprint).**
+   - arXiv: https://arxiv.org/abs/2605.09183
+   - Status: May 2026 preprint / NeurIPS 2026 submission; not a settled result.
+   - Repo experiment: calibrate a policy abstention rule that hands uncertain or
+     shifted states back to search. This formalizes "net acts, search rescues"
+     better than forcing a standalone controller, although the paper's unlabeled
+     test-expert-trajectory assumptions do not match Mario exactly.
+
+6. **Akshay Krishnamurthy, Gene Li, Ayush Sekhari, "The Role of Environment
+   Access in Agnostic Reinforcement Learning" (COLT 2025).**
+   - PMLR: https://proceedings.mlr.press/v291/krishnamurthy25a.html
+   - Full paper: https://arxiv.org/abs/2504.05405
+   - Repo relevance: makes the reset/snapshot access model a first-class
+     experimental variable. Its lower bounds concern agnostic policy learning
+     under particular access and representation assumptions; they do not prove
+     that search always beats learning in Mario.
+
+7. **Rishabh Agarwal et al., "Deep Reinforcement Learning at the Edge of the
+   Statistical Precipice" (NeurIPS 2021).**
+   - NeurIPS: https://proceedings.neurips.cc/paper/2021/hash/f514cec81cb148559cf475e7426eed5e-Abstract.html
+   - Repo experiment: report paired solve-rate, censored time-to-solve,
+     interquartile mean, bootstrap intervals, performance profiles, and
+     probability of improvement across levels/start snapshots. Deterministic
+     emulator seeds are not independent evidence when they generate the same
+     trajectory.
+
+Secondary, conditional leads:
+
+- Dan Haramati et al., "Hierarchical Entity-centric Reinforcement Learning with
+  Factored Subgoal Diffusion" (ICLR 2026).
+  - OpenReview: https://openreview.net/forum?id=TimC6hxVHj
+  - Repo experiment: compare its factored subgoal idea, used strictly as an
+    offline proposal mechanism, against hand-written and failed-tree-mined
+    subgoals for SMA4 options. The paper studies offline goal-conditioned RL;
+    it is not evidence to replace exact option execution or uniform-cost search.
+- Ferdinand Kapl et al., "Are Object-Centric Representations Better At
+  Compositional Generalization?" (February 2026 preprint).
+  - arXiv: https://arxiv.org/abs/2602.16689
+  - Relevance: current evidence that object-centric representations can help
+    under constrained data/diversity/compute, but in visual question answering,
+    not control. It strengthens the case for an entity-vs-dense ablation while
+    warning against treating object tokens as an automatic generalization result.
+- Thomas T. C. K. Zhang et al., "Action Chunking and Data Augmentation Yield
+  Exponential Improvements in Behavior Cloning for Continuous Spaces" (ICLR
+  2026).
+  - OpenReview: https://openreview.net/forum?id=jiWXDvw1Lf
+  - Relevance: supports testing chunked policy outputs and exploratory
+    augmentation if standalone control is reopened. Its guarantees are for
+    continuous-space assumptions and should not be quoted as guarantees for
+    discrete Mario inputs.
+- Shaunak A. Mehta et al., "Stable-BC: Controlling Covariate Shift with Stable
+  Behavior Cloning" (IEEE RA-L 2025).
+  - Project/paper: https://collab.me.vt.edu/Stable-BC/
+  - arXiv: https://arxiv.org/abs/2408.06246
+  - Audit finding: the former `mario/stable_bc.py` perturbation-consistency loss,
+    now honestly named `mario/consistency.py`,
+    does not estimate or constrain the paper's closed-loop error-dynamics
+    Jacobian. Preserve it as a sensitivity regularizer, but do not call it an
+    implementation of Stable-BC or infer contraction from it.
+- Zhou et al., "Stay Hungry, Keep Learning: Sustainable Plasticity for Deep
+  Reinforcement Learning" (ICML 2025).
+  - PMLR: https://proceedings.mlr.press/v267/zhou25am.html
+  - Relevance: neuron regeneration / reset-and-distill methods are worth an
+    ablation only if the reverse-curriculum RL track is resumed.
+
 ### Generalization and Imitation Learning
 
 - Fanqi Lin et al., "Data Scaling Laws in Imitation Learning for Robotic Manipulation", ICLR 2025.
@@ -203,11 +341,13 @@ Bellman 1957 digest: `notes/theory/bellman-1957.md`.
 
 - Haoqun Cao, Tengyang Xie, "Understanding Behavior Cloning with Action Quantization", 2026.
   - arXiv: https://arxiv.org/abs/2603.20538
-  - Repo relevance: recent BC theory around discretized/quantized action spaces; relevant because this
-    project discretizes controller actions.
+  - Repo relevance: a preprint about quantizing continuous actions. Direct relevance
+    to an already-discrete Mario controller is weak; keep it as background rather
+    than evidence that the local BC recipe should succeed.
 
 - Yuda Song et al., "To Distill or Decide? Understanding the Algorithmic Trade-off in Partially
-  Observable Reinforcement Learning", 2025.
+  Observable Reinforcement Learning", NeurIPS 2025.
+  - NeurIPS: https://proceedings.neurips.cc/paper_files/paper/2025/hash/81343f8ebe529de8d0bb654af7523184-Abstract-Conference.html
   - arXiv: https://arxiv.org/abs/2510.03207
   - OpenReview: https://openreview.net/forum?id=iEgaS6wbLa
   - Repo relevance: supports the nuanced view that privileged-state distillation can be efficient but
@@ -351,6 +491,14 @@ Bellman 1957 digest: `notes/theory/bellman-1957.md`.
   - GitHub: https://github.com/SergioMartin86/jaffarPlus
   - Repo relevance: current savestate-search/TAS automation prior art worth studying as a baseline
     for parallel reward-guided emulator search, deduplication, and replay tooling.
+    Its current engine documents many-core search, hash-based state deduplication,
+    deterministic replay, and 15+ emulator cores.
+
+- QuickerMGBA, a headless/re-recording-oriented mGBA fork used by JaffarPlus.
+  - GitHub: https://github.com/SergioMartin86/quickerMGBA
+  - Repo experiment: a bounded throughput spike against Stable-Retro/mGBA using
+    identical state-clone and step workloads. Adopt only if end-to-end
+    nodes/second improves enough to justify a new integration surface.
 
 - SMB3 warp whistles / any% route (for the M4 resource-aware skip).
   - StrategyWiki: https://strategywiki.org/wiki/Super_Mario_Bros._3/Warp_Whistles
@@ -406,7 +554,8 @@ Bellman 1957 digest: `notes/theory/bellman-1957.md`.
 
 - `policy_prior` and value guidance should stay optional accelerators.
   - Backed by AlphaZero/ExIt/Gumbel AlphaZero and the local V6 result: policy-guided beam reduced
-    1-1 nodes while preserving solve correctness. Not yet measured on SMA4.
+    1-1 nodes while preserving solve correctness. The replay-backed comparison is
+    `notes/artifacts/2026-07-25-policy-guided-1-1.json`. Not yet measured on SMA4.
 
 - The active product thesis is the **Option-SMDP whistle benchmark** (SMA4), not a flat generalist.
   - Backed by Sutton options, the local planner-class contrast artifacts, and the 2026-07-14 plan.
@@ -417,8 +566,9 @@ Bellman 1957 digest: `notes/theory/bellman-1957.md`.
   - Backed by Procgen/CoinRun, V4-V6 local failures, and the mismatch between robotic manipulation
     scaling laws and long-horizon platformer levels.
 
-- Reverse-curriculum RL is the right standalone-specialist fallback, if needed.
-  - Backed by Go-Explore, RFCL, RLPD, and BBF, but requires a dedicated RL-engineering pass.
+- Reverse-curriculum RL is a plausible standalone-specialist fallback, if needed.
+  - Motivated by Go-Explore, RFCL, RLPD, and BBF, but requires a reproducible positive local
+    baseline before architectural expansion.
 
 - For SML/SMA4/SMW/SMB3-family expansion, do not start with a generalist policy.
   - First build per-game adapters, RAM/terminal semantics, reliable replay verification, and

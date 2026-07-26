@@ -21,7 +21,8 @@ literature assessment, and the cross-game feasibility analysis._
 
 ## 1. Search phase (the part that fully works)
 Forward-model search over the deterministic, snapshot-able NES emulator:
-- `beam_search` + `coverage_search` (Go-Explore: cell archive `(area,x,y)` + novelty, area-first),
+- `beam_search` + `coverage_search` (a Go-Explore-style beam/archive hybrid:
+  cell coverage `(area,x,y)` + novelty, area-first),
   global progress coordinate Φ (potential-based), value-guided best-first (ExIt §10).
 - **The recurring unlock was an instrumentation fix, not difficulty:** gym-super-mario-bros
   fast-forwards pipe/area transitions *inside* `env.step`, so post-step RAM is blind to entries.
@@ -102,8 +103,9 @@ Key results, all measured:
 ## 3. Novelty & "is it from-scratch?" (researched, honest)
 **Methods are not novel — every block is established prior art, and we built on it explicitly:**
 - Forward-model search for Mario = canonical since **Baumgarten's A* (2009 Mario AI Competition)**.
-- `coverage_search`+distill ≈ **Go-Explore** verbatim (Ecoffet et al., *First return, then explore*,
-  Nature 2021: "exploit determinism, then robustify via imitation").
+- `coverage_search`+distill borrows a **Go-Explore-style** archive/return idea
+  (it is not Go-Explore verbatim; Ecoffet et al., *First return, then explore*,
+  Nature 2021).
 - Cell-novelty = **width-based planning / Rollout-IW** (Bandres/Bonet/Geffner 2018).
 - Φ = **potential-based shaping** (Ng/Harada/Russell 1999); teacher→value→distill = **ExIt**
   (Anthony 2017); warm-start = **DAgger** (Ross 2011). TAS has beaten SMB via savestate search for

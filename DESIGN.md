@@ -1,36 +1,59 @@
 # Mario AI — Design Document
 
-**Goal:** Build a local AI that plays, beats, and eventually speedruns *Super Mario Bros.* (NES), from scratch, with **no external gameplay data**, running **fully on a MacBook Pro 14" (2023, M2 Pro, 16 GB unified memory)**.
+**Goal:** Build a local, from-scratch research system that solves Mario games with exact emulator
+search, then test where learned guidance and hierarchical planning measurably improve that solver.
+The primary machine is a **MacBook Pro 14" (2023, M2 Pro, 16 GB unified memory)**.
 
-**Project intent (chosen):** *Learn the whole stack.* The objective is to implement and genuinely understand every layer — forward-model search, behavior cloning / distillation, DAgger, and value-guided search — end to end. Beating levels is the proof of correctness, not the only point. Breadth and understanding over peak performance.
+**Project intent (chosen):** *Learn the whole stack.* The objective is to implement and genuinely
+understand forward-model search, behavior cloning/distillation, DAgger, learned search guidance,
+emulator adapters, and option-level planning end to end. Replay-verified game progress is the proof
+of correctness; faster routes are an optimization target, not a current universal "speedrun"
+claim. Breadth and understanding over peak performance.
 
 This document is the map. Each module below doubles as a learning unit: it states *what* it is, *why* it exists, the *theory* behind it, the *interface*, and the *failure modes* to watch.
 
-Date: 2026-06-03. Author/operator: single developer on one machine.
+Date: 2026-06-03.
+Updated: 2026-07-25 after the repository-wide evidence and architecture audit.
 
 ---
 
 ## 0. The core idea in one paragraph
 
-Super Mario Bros. is a **deterministic** game: `state_{t+1} = emulator(state_t, action_t)`. Because we *own a perfect simulator*, we don't need to learn physics — we can **search** the simulator for good action sequences (this is the historically dominant approach for Mario). Search is slow, so we **distill** what it finds into a tiny neural network that plays instantly. The net inevitably wanders into states the search never showed it, so we **correct** it by re-running search from its own failure states and retraining (**DAgger**). Optionally, we make the search itself smarter with a **learned value function**. That loop — search → distill → correct → (guide) — is the whole project.
+For a fixed emulator configuration, Mario supplies an exact, resettable transition function:
+`state_{t+1} = emulator(state_t, action_t)`. Search therefore remains the low-level solver; there is
+no need to approximate known emulator dynamics. Search trajectories can train small policies, but
+the strongest current learning use is to **guide** search while retaining exact expansion and
+replay verification. Non-NES games enter through a shared adapter contract. Longer routes are
+represented as options whose effects are observed by execution, but the current SMA4 system is a
+**segmented option-planning prototype**, not yet one continuous Option-SMDP run.
 
 ```
-NES emulator (true forward model)
+NES / GB / GBA emulator
         │
-   RAM/tile extractor  ──────────────► compact Markov-ish observation
+   GameAdapter: reset, snapshot/restore, step, progress, terminal
+        ├──────────────────────────────────────────────────────────┐
+        │                                                          │
+   RAM/tile/entity observation                               MetaState + options
+        │                                                          │
+   chunked action space                                      execute-to-observe
+        │                                                          │
+   beam / coverage search  ◄── optional policy/value prior    option planner
         │
-   chunked action space (SIMPLE_MOVEMENT + frame-skip)
+   replay-gated solution artifact
         │
-   beam search / A* teacher (death-aware reward)  ◄── [later] learned value net
-        │
-   self-generated trajectory buffer  (state, action-chunk, value)
-        │
-   tiny MLP/GRU student policy  (soft, chunked behavior cloning)
-        │
-   DAgger correction loop  (uncertainty-gated re-labeling)
-        │
-   [later] speed objective + value-guided search
+   self-generated labels → BC / DAgger / input consistency
 ```
+
+**Evidence snapshot, 2026-07-25:**
+
+- SMB1 any% is 8/8 with `beat_game=True`.
+- SMB1 stock coverage is **30/32 replay-verified**. 6-2 is unsolved; 6-3 is quarantined after a
+  seed-0 replay failure.
+- The positive learned-guidance result is local to 1-1: 7005 plain-beam nodes versus 2770 guided
+  nodes (60.5% fewer; 2.53 plain/guided ratio), with solve preservation in that configuration. The checkpoint/data are
+  local and lack a clean-clone training-provenance chain.
+- The SMA4 whistle/World-8 route is a segmented mixed emulator/symbolic benchmark with declared
+  state and inventory interventions. It is not evidence of a continuous full-ROM route.
 
 ---
 
@@ -38,10 +61,19 @@ NES emulator (true forward model)
 
 Grounded in the literature so the choices are defensible, not cargo-culted.
 
-- **Search > RL when you have a forward model.** The 2009–2012 Mario AI Competition was dominated by Robin Baumgarten's **A\*** (cleared every level; best hand-coded controller scored <50%). The Togelius/Karakovskiy survey's conclusion: with a simulator, planning beats learning for this task. We have a perfect simulator.
-- **Don't learn a world model — we already have the real one.** MuZero / EfficientZero / DreamerV3 exist to *learn* dynamics from pixels. EfficientZero is sample-efficient but wall-clock-hungry (reference repros: A100 + ~20 CPU cores, 1–2 days *per game*) — hostile to a 16 GB Mac and pointless when the emulator is free. **Out of scope** except as optional reading.
+- **Search is a strong fit when exact resets are available.** A* was the strongest historical
+  baseline in the Mario AI Competition, and this repository's own artifact-backed successes are
+  emulator-search results. This is a project-specific engineering conclusion, not a theorem that
+  planning dominates learning in every resettable environment.
+- **A learned world model is not the current bottleneck.** MuZero, EfficientZero, and Dreamer learn
+  dynamics when the real transition model is unavailable or too costly. Here the emulator is
+  exact and locally callable, so model learning is lower priority than search efficiency,
+  abstraction quality, and option composition. A learned abstraction could still become useful
+  if raw emulator throughput or transfer becomes limiting.
 - **Closest prior art:** Tom Murphy VII's `learnfun`/`playfun` (SIGBOVIK 2013): emulator-as-forward-model + searched action sequences + reusable "motifs" (= our action chunks). It beats 1-1 with superhuman timing but never distilled search into a reactive net — that gap is exactly what we add.
-- **Pure pixel PPO is the beginner route.** It can learn 1-1 (public repos clear 31/32 levels, but **per-level overfit**, ~4.5 h/level on a *real GPU* — slower here). We keep PPO only as an optional **fine-tuning** step at the very end, never as the foundation.
+- **Pixel-only RL is a different research question.** It discards emulator state and exact reset
+  advantages, so it is not the foundation here. Reverse-curriculum RL remains an optional
+  specialist experiment, not a substitute for verified search.
 
 ---
 
@@ -56,7 +88,12 @@ Grounded in the literature so the choices are defensible, not cargo-culted.
 
 ## 3. Environment & toolchain
 
-**Decision: `gym-super-mario-bros` 8.0.0 + `nes-py` 9.0.0.** As of the May 2026 revival this is the clear winner on Apple Silicon:
+**Current decision: adapter-first.** The original NES SMB1 lane still uses
+`gym-super-mario-bros` 8.0.0 + `nes-py` 9.0.0. Cross-game work now goes through
+`mario.adapters.GameAdapter` so each emulator only has to provide reset,
+snapshot/restore, action stepping, terminal checks, and progress/cell semantics.
+
+For NES SMB1, `gym-super-mario-bros` / `nes-py` remains the best local tool:
 
 - Prebuilt **arm64 wheels** — `pip install gym-super-mario-bros` just works, no compiler.
 - Migrated to **Gymnasium** (`gymnasium>=1.0.0`).
@@ -64,31 +101,57 @@ Grounded in the literature so the choices are defensible, not cargo-culted.
 - Direct RAM access for building observations and reward.
 - Headless by default (`render_mode=None`).
 
-**Hard constraint:** requires **Python 3.13+**. This conflicts with `stable-retro` (≤3.12), so we commit to the nes-py lane.
+For GBA and other non-NES Mario games, **Stable-Retro/mGBA is now accepted and used**.
+The SMA4 / SMB3 path runs through `SMA4Adapter` and `SMA4OverworldAdapter`,
+sharing one Stable-Retro core between the overworld and level views so savestates
+are interchangeable. PyBoy is used for Super Mario Land experiments.
 
-**Rejected alternatives:** `stable-retro` (heavier zlib state clones, Py≤3.12, must hand-author SMB integration); `FCEUX`+Lua (great TAS tool, but search must be written in Lua, no clean Python headless throughput — keep only for *verifying/replaying* finished runs); `BizHawk` (not native on Apple Silicon); `cynes`/`libretro.py`/`TetaNES` (viable fallbacks but more DIY).
+**Caveat:** emulator APIs differ. The adapter boundary is mandatory; do not thread
+game-specific RAM/action assumptions through the generic solver.
 
-**Toolchain:**
-- Python **3.13** venv (`uv` or `python -m venv`).
-- `gym-super-mario-bros`, `gymnasium`, `numpy`, `torch` (MPS), `tqdm`, `tensorboard` (or simple CSV logging), `pytest`.
-- FCEUX (optional, GUI) only to watch/verify replays.
+**Rejected or secondary alternatives:** `FCEUX`+Lua (great TAS tool, but search must be written in Lua, no clean Python headless throughput — keep only for *verifying/replaying* finished runs); `BizHawk` (not native on Apple Silicon); `cynes`/`libretro.py`/`TetaNES` (viable fallbacks but more DIY).
 
-**First thing to do before writing any search:** microbenchmark on *this* machine —
-1. headless `env.step` rate, and
-2. `dump_state()`/`load_state()` round-trip cost.
-Per-node clone cost, not raw fps, dominates beam throughput. Record the numbers in `bench/` so later tuning has a baseline.
+**Toolchain and dependency isolation:**
+
+- Python **3.13** environments created with `uv`.
+- The common package contains Gymnasium, NumPy, Torch, image/report dependencies, and the generic
+  adapter/search code.
+- The NES extra contains `gym-super-mario-bros`/`nes-py`; the GBA extra contains Stable-Retro;
+  the SML extra contains PyBoy.
+- NES and GBA must use **separate environments**: `nes-py==9.0.0` requires
+  `pyglet<=1.5.21`, while `stable-retro==1.0.1` requires `pyglet>=1.5.27,<2`.
+- ROMs stay local under ignored `roms/`; FCEUX remains an optional replay viewer.
+
+```bash
+# NES / SMB1
+uv venv --python 3.13 venv
+uv pip install --python venv/bin/python -e '.[nes,dev]'
+
+# GBA SMA4 + GB SML
+uv venv --python 3.13 venv-gba
+uv pip install --python venv-gba/bin/python -e '.[gba,sml,dev]'
+```
+
+The next throughput work should measure both headless stepping and snapshot round trips on this
+machine, then compare alternative emulator cores under the same state/replay contract. Per-node
+clone cost, not just raw fps, determines search throughput.
 
 ---
 
 ## 4. Observation design
 
-**Decision: RAM/tile features, not pixels.** State features are far more sample-efficient; we skip the CNN entirely and train a tiny MLP/GRU.
+**Decision: RAM/tile features, not pixels.** State features are far more
+sample-efficient here. The implemented learners are a compact dense
+`MarioPolicy` over stacked observations and entity-token Transformers over
+structured player/enemy/terrain features; there is no pixel CNN.
 
 **Observation vector = ego-centric tile grid + scalar features.**
 
 - **Tile grid:** a window around Mario, e.g. `H×W` (start ~13×16) of small integer codes: `0` empty, `1` solid, `2` Mario, `-1` enemy, plus a few for hazards/pipes/coins. Built by reading tile RAM and enemy/Mario positions ÷16. **Use *relative* offsets** (window centered on Mario) so it generalizes across levels — never feed absolute level-x as a feature.
 - **Scalars:** horizontal velocity `0x0057`, vertical velocity `0x009F`, powerup state `0x0756`, float/airborne state `0x001D`, on-ground flag, maybe time-bucket.
-- **Temporal context:** raw RAM is **not fully Markov** (enemy slots get reused, some state is in PPU/timers). Use a **frame stack (k=2–4)** or a **GRU** so the policy doesn't oscillate.
+- **Temporal context:** raw RAM is **not fully Markov** (enemy slots get reused,
+  some state is in PPU/timers). The implemented paths use a frame stack or
+  `TemporalEntityTransformer`; a GRU remains an untested alternative.
 
 **Key SMB RAM addresses** (from Data Crystal `Super_Mario_Bros./RAM_map`):
 
@@ -117,13 +180,25 @@ The env's `info` dict already exposes `x_pos, y_pos, status, life, time, world, 
 
 ## 5. Action representation
 
-**Decision: `SIMPLE_MOVEMENT` (7 actions) + frame-skip 4.**
+**Current contract: nine fixed SMB1 actions + an 8-frame default chunk.**
 
-`SIMPLE_MOVEMENT = [NOOP, right, right+A, right+B, right+A+B, A, left]`.
+`SMB1_ACTIONS = [NOOP, right, right+A, right+B, right+A+B, A, left, down, up]`.
+These indices are persisted in solution and training artifacts, so they must
+never be reordered. `mario/actions.py` is the canonical emulator-free schema.
 
-- **Frame-skip = action repeat:** each chosen action is held for `k=4` frames, reward accumulated. This is the single biggest lever — keeps beam branching at 7, and a depth-`d` beam covers ~`d·4` frames ≈ `d/15` s.
-- **Action chunks ("motifs"):** the search and the policy both operate on **chunks** — short fixed-length action sequences — not per-frame buttons. Align the policy's chunk length to the search granularity.
-- **Caveat:** frame-skip misses **frame-perfect** inputs (precise jumps, wall-clips). Fine for "beat the level"; for later speed work, use **adaptive skip** (finer control near hazards). Add `left`-containing and longer-hold chunks so backtracking/routing is *possible* (greedy-right-only search provably fails on deceptive geometry like 4-2/8-4 warps).
+- **Chunking = action repeat:** the normal search default holds each chosen
+  action for `k=8` frames, so a depth-`d` path spans at most `8d` primitive
+  frames. Precision specialists and future variable-duration search can use a
+  different declared `chunk_frames`; every artifact must record it.
+- **Held-action chunks:** one decision selects one button combination and holds
+  it for the declared number of frames. The stored path is a sequence of those
+  action indices, not a policy-predicted multi-action motif.
+- **Caveat:** fixed-duration chunks miss **frame-perfect** inputs and phase
+  changes (precise jumps, wall-clips, moving platforms). Completion-oriented
+  search already falls back to finer chunks where needed; the next 6-2
+  experiment should compare declared durations such as `{1,2,4,8,16}` under
+  equal primitive-frame and wall-clock budgets. `left`, `down`, and `up` keep
+  backtracking, pipe entry, and door/vertical interactions representable.
 
 ---
 
@@ -145,7 +220,7 @@ for depth in range(max_depth):
     # keep best complete trajectory seen so far (playfun's "replay a good future")
 ```
 
-**Reward / evaluation — THE most important thing to get right.** Tom7's two canonical failures define the rules:
+**Ranking / evaluation — the most important thing to get right.** Tom7's two canonical failures define the rules:
 1. **Death/lives MUST be in the objective** as a hard negative — else Mario jumps into pits because respawning one screen back still scores OK.
 2. **Ignore counter-style RAM** (score, timer, music, scroll) — they give *fake monotone progress* and cause the agent to get stuck humping a wall forever (the 1-2 coin-ledge trap).
 
@@ -157,6 +232,10 @@ score = + W_progress * Δ(level_x)        # true rightward progress — the load
         - W_time     * frames_elapsed     # SMALL, and see framerules below
         - W_stuck    * no_progress_steps
 ```
+
+The implementation also uses area-aware, potential-inspired progress features so a pipe transition
+does not look like a backward jump. This is a practical search-ranking heuristic; the repository
+does **not** claim the policy-invariance theorem of formal potential-based reward shaping.
 
 **Framerule subtlety:** SMB rounds level time up to the next **21-frame boundary**, so shaving 1–20 frames *inside* a level saves nothing — **except 8-4** (un-ruled). So `W_time` should be ~0 during the "beat it" phase; only the **final segment** / speed phase optimizes frames.
 
@@ -172,7 +251,7 @@ score = + W_progress * Δ(level_x)        # true rightward progress — the load
 ```python
 class SearchTeacher:
     def solve(self, start_snapshot, max_depth, beam_width) -> Trajectory: ...
-    def label(self, snapshot) -> (best_chunk, soft_targets, value):
+    def label(self, snapshot) -> (best_action, soft_targets, value):
         """Run a (possibly shallow) search from an arbitrary state.
         This is the DAgger query — must give GOOD labels off-distribution."""
 ```
@@ -187,8 +266,8 @@ Record per decision point:
 ```
 {
   obs:          float array (tile grid + scalars),   # what the student sees
-  best_chunk:   int,                                  # argmax teacher action (hard label)
-  soft_targets: float[num_chunks],                    # distribution over teacher's surviving top chunks
+  hard_action:  int,                                  # argmax teacher action (hard label)
+  soft_targets: float[N_ACTIONS],                     # distribution over the 9 held-action choices
   value:        float,                                # teacher's estimated value (for value-net training)
   level:        (world, stage),
   source:       "search" | "dagger_round_i",
@@ -202,22 +281,37 @@ Store as sharded `.npz`/`.parquet` under `data/`. Cap or reservoir-sample the ag
 
 ## 8. The student policy (distillation)
 
-**Model: tiny MLP or GRU, 100k–2M params.** No CNN (we use RAM/tile features). Inputs: stacked observation. Output: distribution over action chunks (+ optional value head).
+**Implemented models:** a compact MLP over stacked dense observations and
+entity-token Transformers (including a temporal variant), with optional value
+heads. Each output is a distribution over the nine button combinations. Search
+then holds the selected combination for the artifact's declared
+`chunk_frames`; the policy does not currently emit a multi-action sequence.
 
 **Loss: soft, chunked behavior cloning.**
-- Don't clone only the single best action — clone the **distribution over the teacher's surviving top chunks** (AlphaZero visit-count-style soft targets). Soft targets transfer more info and regularize a tiny student.
-- Predict short **action chunks** (ACT-style), aligned to frame-skip, to cut compounding error over the horizon.
+- Don't clone only the single best action—when the teacher exposes comparable action values, clone
+  a normalized distribution over surviving chunks. This is a search-derived soft target, not an
+  AlphaZero visit-count target unless an iterative tree-search/visit process is actually used.
+- A future ACT-style sequence-output policy is a separate, unimplemented
+  experiment. Do not use action-chunking theory to describe the present
+  single-action-held-for-\(k\)-frames controller.
 - `loss = CE(student_logits, soft_targets) [+ λ·MSE(value_head, teacher_value)]`.
 
 **Eval metrics:** completion rate per level, median x_pos reached, best time, **death-location histogram** (drives where DAgger spends budget).
 
-**Failure modes:** non-Markov input → use frame-stack/GRU; cross-level distribution shift → train/eval on multiple levels with relative features; the student can only be as good as the teacher's labels on the *student's* distribution (→ DAgger).
+**Failure modes:** non-Markov input → use the frame-stack/temporal Transformer
+and test state sufficiency; cross-level distribution shift → train/eval on
+multiple levels with relative features; the student can only be as good as the
+teacher's labels on the *student's* distribution (→ DAgger).
 
 ---
 
 ## 9. DAgger correction loop
 
-Plain BC fails because one bad jump lands Mario in a state never seen in training; errors compound (BC error grows ∝ T², DAgger ∝ T). DAgger trains on the **learner's own induced state distribution**.
+Plain BC can fail when one bad jump reaches a state absent from the demonstrations. Classical
+worst-case analyses show the familiar quadratic-horizon compounding-error bound for naive BC and
+a linear-horizon bound for interactive imitation under their assumptions. DAgger addresses that
+distribution mismatch by collecting labels on the **learner's induced state distribution**; it
+does not itself guarantee cross-level generalization.
 
 ```
 1. Train π₁ by BC on the search-generated dataset.
@@ -230,7 +324,9 @@ Plain BC fails because one bad jump lands Mario in a state never seen in trainin
 3. Return best π_i on a validation set of levels.
 ```
 
-**Why search-as-expert + DAgger is a perfect match:** DAgger needs a queryable expert *at arbitrary states*. A human can't do that; **our beam search can** (`label(snapshot)`).
+**Why search-as-expert + DAgger is an operational match:** DAgger needs a queryable expert at
+learner-visited states. Snapshot search can label such states (`label(snapshot)`), subject to its
+own horizon and search-budget errors.
 
 **Uncertainty gating (spend search budget wisely):** don't re-label every frame. Query the teacher only where the policy is unsure — SafeDAgger (a learned "is the policy safe here?" classifier) or DADAgger (ensemble disagreement). Natural fit: re-label clustered around death-histogram hotspots.
 
@@ -240,82 +336,132 @@ Plain BC fails because one bad jump lands Mario in a state never seen in trainin
 
 ---
 
-## 10. [Later] Value-guided search & speed objective
+## 10. Learned guidance and route-cost optimization
 
-Only after fixed-depth search visibly stalls on specific obstacles:
+Policy/value guidance is implemented, but the evidence is deliberately narrow:
 
-- **Learned value net `V(s)`** to *prune/order* the beam (best-first beam search; ~30% speedups, more at larger beams). Lets a *shallow* beam behave like a deep one — directly attacks Tom7's short-horizon failures.
-- **This closes the AlphaZero/ExIt loop in miniature:** search (guided by `V` + the policy as a prior) produces improved targets → distill policy *and* value → better `V` makes the next search better.
-- **Bootstrapping fragility:** a bad early `V` prunes the good branch, never learns it's good. Mitigate with a **beam-width floor** (never prune below N), **root exploration noise** (Dirichlet-style), and dense shaping (Δlevel-x) not just sparse flag reward.
-- **Speed objective (final phase):** crank `W_flag` + milestone bonuses, add `-W_time·frames` but **respect framerules** (per-frame time only matters on the last segment / 8-4). Optionally a short **PPO fine-tune** at the very end — never as the foundation.
+- On SMB1 1-1 at width 6/top-3, one local entity-policy prior reduced expansions from 7005 to 2770
+  while both configurations solved. That is a **single-level search-guidance observation**, not an
+  AlphaZero result and not evidence of a universal 2.53 plain/guided ratio.
+- Hard top-k pruning is incomplete: the same weak prior can discard the successful action at a
+  tighter top-k. Prefer soft priors, a uniform fallback, entropy-adaptive mixing, or
+  completeness-safe policy-guided heuristic search.
+- A learned value may order a frontier, but it must be evaluated under paired node/wall-clock
+  budgets and a solve-rate non-inferiority gate. A misleading value can prune the only viable
+  route.
+- Frame cost is a later optimization objective. SMB framerules and emulator-measured duration must
+  be reported explicitly; completion or an improved route is not automatically a speedrun record.
 
-**Pragmatic order:** hand-coded heuristic (progress − danger) for beam ordering first → add the policy net as a cheap **action-ordering prior** → add a learned **value net** last.
+The next guidance benchmark spans at least six level types and multiple starts/seeds, comparing
+plain search, static/random priors, fixed top-k, soft log-priors, uniform mixtures,
+entropy-adaptive pruning, and a PHS/Levin-style safe alternative. Use bootstrap intervals and
+solve-rate preservation rather than a single timing.
 
 ---
 
-## 11. Repository layout
+## 11. Cross-game and option architecture
+
+`mario.adapters.GameAdapter` defines reset, snapshot/restore, action stepping, progress/cell
+semantics, and terminal reporting. NES imports are lazy so GBA/SML-only environments can import the
+shared solver without installing `nes-py`.
+
+At the route layer:
+
+1. `MetaState` compresses world/map position, clears, inventory, and flags.
+2. An `Option` declares an initiation test, executor, termination result, and measured/symbolic
+   cost.
+3. `OptionContext` maps symbolic states to emulator snapshots.
+4. greedy, breadth/uniform-cost, and execute-to-observe planners compose available options.
+
+The SMA4 implementation has real level/overworld executors and replayable 1-1/1-2 segments, but
+some route steps restore independent cached states or apply power/map/cursor interventions.
+`OptionContext` is also first-wins for a compressed `MetaState`, so distinct emulator states can
+alias. Until exact predecessor/entry hashes compose and alias tests pass, call this a **segmented
+option-planning prototype**. Report ROM frames, symbolic endpoint costs, and injected facts
+separately.
+
+---
+
+## 12. Repository layout
 
 ```
 mario_ai/
   DESIGN.md                  # this file
-  pyproject.toml             # Py3.13, deps
-  bench/                     # step-rate & snapshot-cost microbenchmarks (run FIRST)
+  pyproject.toml             # common package + isolated NES/GBA/SML extras
   mario/
-    env.py                   # gym-super-mario-bros wrapper, frame-skip, headless
-    observation.py           # RAM → tile grid + scalars (Section 4)
-    actions.py               # SIMPLE_MOVEMENT chunks / motifs (Section 5)
-    reward.py                # death-aware evaluate() (Section 6) — heavily tested
-    search.py                # beam search / A* teacher + label() (Section 6)
-    buffer.py                # trajectory dataset I/O (Section 7)
-    policy.py                # tiny MLP/GRU student (Section 8)
-    train.py                 # soft chunked BC (Section 8)
-    dagger.py                # correction loop (Section 9)
-    value.py                 # [later] learned value net (Section 10)
-    eval.py                  # completion rate, death histograms, replay export
+    env.py                   # NES wrapper and exact cache-aware restore
+    adapters.py              # NES, SMA4 level/overworld, and SML boundary
+    search.py                # native + adapter beam/coverage search
+    solution_verification.py # reusable replay gate
+    observation.py           # RAM → tile grid + scalars
+    entity.py                # structured entity observation
+    policy.py                # compact tile policy
+    entity_policy.py         # entity/temporal models and search priors
+    consistency.py           # input perturbation consistency (not Stable-BC)
+    options.py               # option contracts, executors, BFS
+    meta_planner.py          # greedy/uniform-cost SMA4 planning experiments
   scripts/
-    v0_search_1_1.py         # milestone V0
-    gen_dataset.py
-    run_dagger.py
-  data/                      # generated trajectories (gitignored)
-  runs/                      # logs, checkpoints, death histograms
-  tests/                     # pytest: reward correctness, snapshot determinism, obs shape
+    solve_all_stock.py
+    verify_stock_solutions.py
+    policy_guided_search.py
+    solve_sma4*.py / solve_sml.py
+  data/solutions/            # small canonical replay manifests
+  data/, runs/               # large generated artifacts (ignored)
+  tests/                     # deterministic, learning, adapter/option, CLI gates
 ```
 
 ---
 
-## 12. Milestones (each is a learning unit)
+## 13. Milestones and current gates
 
-| Ver | Deliverable | What you learn / proves |
+The original V0–V5 sequence is preserved as project history:
+
+| Ver | Historical learning unit | Durable outcome |
 |---|---|---|
-| **V0** | **Beat 1-1 with pure search** (no net) | Forward-model loop, snapshot save/restore, reward design. *Highest-information first step.* |
-| **V1** | Self-generated dataset across 1-1…1-4 | Trajectory logging, curriculum, soft targets |
-| **V2** | Tiny student policy clears 1-1 from BC alone | Distillation, observation/action design, MPS training |
-| **V3** | DAgger lifts completion rate on its own failures | Distribution shift, expert querying, uncertainty gating |
-| **V4** | Multi-world clears via curriculum + DAgger; 8-4 special-cased | Generalization, warp routing |
-| **V5** | Value-guided search + speed objective; optional PPO fine-tune | Best-first search, ExIt loop, framerules |
+| **V0** | Beat 1-1 with pure search | exact snapshots, action chunks, ranking |
+| **V1** | Generate search-labelled data | trajectory/data contracts |
+| **V2** | Train compact policies | distillation and observation design |
+| **V3** | Query search on learner states | DAgger and covariate-shift failures |
+| **V4** | Solve the full any% route | mechanic-aware routing and replay composition |
+| **V5/V6** | Test generalist control and learned guidance | useful standalone negatives; local 1-1 prior win |
 
-**Definition of done for the educational goal:** every module in §11 implemented, understood, and exercised by a milestone — with `reward.py` and `search.py` covered by tests, and a written retro on where each theoretical failure mode (death-in-objective, fake-progress counters, teacher myopia, distribution shift, MPS parity) actually showed up in practice.
+Current evidence gates, in order:
 
----
-
-## 13. Open questions / decisions deferred
-
-- Exact tile-grid dimensions and code vocabulary (tune empirically against deaths).
-- Chunk length and chunk library (which motifs; how many `left`/long-hold chunks).
-- Beam width vs. depth budget given measured snapshot cost (decide after `bench/`).
-- Whether a GRU is worth it over a frame-stack MLP (try MLP first).
-- When exactly to introduce the value net (only when fixed-depth search stalls).
+1. Keep code/docs/manifests clean-clone coherent and replay-gate all stock claims.
+2. Remove or tier SMA4 state interventions; match exact predecessor/entry hashes.
+3. Formalize option initiation/termination/state sufficiency and add unknown-effect baselines.
+4. Re-solve 6-3; instrument moving-platform phase and variable action durations for 6-2.
+5. Test learned priors across levels without reducing solve rate.
 
 ---
 
-## 14. Key references
+## 14. Open questions / decisions deferred
 
-- Baumgarten A\* / Mario AI Competition; Karakovskiy & Togelius survey — search dominates with a forward model.
+- Which platform/enemy phase variables make 6-2 search state sufficiently Markov?
+- Do variable action durations `{1,2,4,8,16}` improve moving-platform search under equal budgets?
+- Can PHS/PHS* or Levin-style guidance retain completeness while capturing the local prior gain?
+- Which fields must be added to `MetaState` so equal symbolic states predict equal option outcomes?
+- Does unknown-option planning still beat greedy after both receive the same learned/cached effect
+  model and cost definition?
+
+---
+
+## 15. Key references
+
+- Baumgarten A\* / Mario AI Competition; Karakovskiy & Togelius survey — historical
+  forward-model planning evidence.
 - Tom Murphy VII, *learnfun/playfun* (SIGBOVIK 2013), tom7.org/mario — closest prior art; objective-design failure modes.
 - Ross, Gordon, Bagnell, *DAgger* (AISTATS 2011) — train on learner's induced distribution.
-- AlphaZero/MuZero & *Expert Iteration* (Anthony 2017) — search-as-teacher, visit-count soft targets.
-- Zhao et al., *ACT* (2023) — action chunking cuts compounding error.
-- Best-First Beam Search (arXiv 2007.03909); MCTS as regularized policy optimization (arXiv 2007.12509).
+- Anthony et al., *Expert Iteration* (2017) — iterative search/imitation framework; an analogy,
+  not the name of the current one-pass prior experiment.
+- Zhao et al., *ACT* (2023) — future sequence-output/action-chunking lead, not
+  the architecture currently implemented here.
+- Orseau and Lelis, *Policy-guided Heuristic Search with Guarantees* (AAAI 2021) — a direct
+  candidate for safe learned guidance.
+- Chatterjee and Khardon, *Planning with Variable-duration Actions* (NeurIPS 2025) — relevant to
+  moving platforms and P-speed.
+- Guez, Silver, and Dayan, *BAMCP* (NeurIPS 2012) — belief/history baseline for unknown options.
 - Data Crystal — *Super Mario Bros. RAM map*.
-- gym-super-mario-bros / nes-py (Kautenja), revived May 2026, arm64 wheels, `dump_state`/`load_state`.
-```
+- gym-super-mario-bros / nes-py (Kautenja) — NES environment and snapshot API.
+
+The annotated, date-checked bibliography is `notes/research-bibliography.md`.

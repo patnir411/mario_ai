@@ -7,12 +7,28 @@ __pycache__/
 # Virtual env (native arm64, recreate with: uv venv --python 3.13 venv)
 venv/
 .venv/
+.venv-*/
+venv-*/
 
-# Generated artifacts — ground truth, regenerable; not source
-data/
+# Generated artifacts — datasets/checkpoints are local.  Small canonical
+# replay manifests are source-like evidence and are explicitly unignored.
+data/*
+!data/solutions/
+data/solutions/*
+!data/solutions/README.md
+!data/solutions/[1-8]-[1-4].json
+!data/solutions/sma4/
+data/solutions/sma4/*
+!data/solutions/sma4/*.json
+!data/solutions/sml/
+data/solutions/sml/*
+!data/solutions/sml/*.json
 runs/
 roms/
 *.pt
+
+# Browser automation captures can contain login/OAuth state and dashboard text.
+.playwright-mcp/
 
 # Theory PDF corpus + extracted text (re-fetch: notes/theory/fetch_corpus.py)
 notes/theory/pdfs/

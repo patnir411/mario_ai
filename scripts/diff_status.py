@@ -18,22 +18,13 @@ COMPLETION_TOL = 0.02     # a drop larger than this is a regression
 FRAMERULE_TOL = 1         # mid-level framerule increase larger than this is a regression
 
 
-def main() -> int:
-    cur_p, prev_p = RUNS / "status.json", RUNS / "status.prev.json"
-    if not cur_p.exists():
-        print("no status.json yet — run update_status.py first")
-        return 0
-    if not prev_p.exists():
-        print("no previous status to diff against (first reconcile)")
-        return 0
-
-    cur = json.loads(cur_p.read_text()).get("current_best", {})
-    prev = json.loads(prev_p.read_text()).get("current_best", {})
+def compare_current_best(cur: dict, prev: dict) -> tuple[list[str], list[str]]:
     regressions, improvements = [], []
 
     for lvl, pv in prev.items():
         cv = cur.get(lvl)
         if cv is None:
+            regressions.append(f"{lvl}: evidence disappeared from current_best")
             continue
         if pv.get("beat") and not cv.get("beat"):
             regressions.append(f"{lvl}: lost a beating solution (was beat, now not)")
@@ -51,6 +42,21 @@ def main() -> int:
                                    f"{cv['framerule_time']} (+{df}) mid-level")
             elif df < 0:
                 improvements.append(f"{lvl}: framerule {df}")
+    return regressions, improvements
+
+
+def main() -> int:
+    cur_p, prev_p = RUNS / "status.json", RUNS / "status.prev.json"
+    if not cur_p.exists():
+        print("no status.json yet — run update_status.py first")
+        return 0
+    if not prev_p.exists():
+        print("no previous status to diff against (first reconcile)")
+        return 0
+
+    cur = json.loads(cur_p.read_text()).get("current_best", {})
+    prev = json.loads(prev_p.read_text()).get("current_best", {})
+    regressions, improvements = compare_current_best(cur, prev)
 
     for i in improvements:
         print("IMPROVED:", i)

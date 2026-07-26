@@ -2,6 +2,32 @@
 
 Newest first. Detailed notes live under `notes/sessions/`.
 
+## 2026-07-25 — Full project audit + next-step program
+
+Detailed note: `notes/sessions/2026-07-25-project-audit-and-next-steps.md`
+
+Summary:
+- Reconstructed the dirty tree, artifact state, research claims, and current
+  SMA4 honesty ladder before cleanup.
+- Corrected the stock-level interpretation: 6-2 is unsolved and 6-3 is
+  quarantined after failing seed-0 replay, so the defensible headline is
+  **30/32 replay-verified**, not 31/32.
+- Final artifact-rich suite: **134 passed / 10 skipped**; exact source-only and
+  fresh NES installs: **133 passed / 11 skipped**. Fresh GBA+SML focused suite:
+  **27 passed / 10 ROM-gated skipped**.
+- Repaired status regeneration with a source-controlled legacy baseline and a
+  truthful full-suite gate; direct solution publishers now replay before
+  promotion, and strict manifest/schema tests lock the contract.
+- Regenerated the 1-1 learned-guidance artifact at 7005/2770 nodes with both
+  paths replayed and source/checkpoint/training-row hashes recorded.
+- Replayed both SMA4 whistle acquisitions; 1-3 now verifies an actual overworld
+  exit using the live map-event invariant, and all snapshot roots carry hashes.
+- Finalized the commit boundary across V5/V6 core, cross-game CLIs, small
+  solution/status artifacts, docs, and excluded Playwright/runtime debris.
+- Gated next phases: evidence checkpoint -> live overworld fortress entry
+  honesty burn -> stronger planner controls -> 6-3/6-2 -> multi-level calibrated
+  policy-guided search.
+
 ## 2026-07-17 — Drop fortress door-entry snapshot
 
 Detailed note: `notes/sessions/2026-07-15-acquire-whistle-fortress.md`

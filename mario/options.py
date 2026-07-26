@@ -275,8 +275,6 @@ class SMA4WhistleExecutor:
         Success = inventory slot contains warp whistle ``0x0C`` after the
         Toad-house chest open + map exit.
         """
-        import numpy as np
-
         sol_path = Path(solution_path or self.ACQUIRE_WHISTLE_1_3)
         sol = json.loads(sol_path.read_text())
         entry = Path(entry_snapshot or sol.get("entry_snapshot")
@@ -297,13 +295,18 @@ class SMA4WhistleExecutor:
         for bt in buttons:
             self.core._step_buttons(bt)
             frames += 1
+        # The recorded option includes its own chest-house exit.  Do not infer
+        # that exit from screen brightness or silently repair a truncated path:
+        # the option succeeds only if replay itself reaches the overworld.
+        frames += self._step((), 12)
         inv = self.inventory()
         after_count = sum(1 for v in inv if v == self.WARP_WHISTLE)
-        success = after_count >= max(1, prior_count + 1)
-        # If the recorded path stopped inside the house, finish the exit.
-        if success and float(np.asarray(self.core.last_obs).mean()) > 40:
-            # Already includes exit in the verified solution; no-op settle.
-            frames += self._step((), 12)
+        final_mode = self.core.last_info.get("mode")
+        exit_verified = final_mode == "overworld"
+        success = (
+            after_count >= max(1, prior_count + 1)
+            and exit_verified
+        )
         samples.append(self.sample("after_acquire_whistle_1_3", frames))
         injected = ["pwing_1_3_entry_snapshot"]
         if prior_count:
@@ -314,6 +317,8 @@ class SMA4WhistleExecutor:
             "samples": samples,
             "inventory_first4": inv[:4],
             "whistle_count": int(after_count),
+            "final_mode": final_mode,
+            "exit_verified": exit_verified,
             "solution": str(sol_path),
             "entry_snapshot": str(entry),
             "knowledge_tier": int(KnowledgeTier.TIER2_BLACK_BOX_OPTION),

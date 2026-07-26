@@ -6,16 +6,28 @@ threading game-specific conditionals through the solver.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 import hashlib
 import io
 import os
 from pathlib import Path
 from typing import Any, Protocol
 
-from mario.env import ACTIONS as SMB1_ACTIONS
-from mario.env import MarioSim
+from mario.actions import SMB1_ACTIONS
 from mario.reward import is_death as smb1_is_death
 from mario.reward import is_success as smb1_is_success
+
+
+def _load_mario_sim():
+    """Load the optional NES backend only when an SMB1 adapter is constructed."""
+    try:
+        from mario.env import MarioSim
+    except ImportError as exc:  # pragma: no cover - depends on optional install
+        raise RuntimeError(
+            "SMB1Adapter requires the NES emulator stack. Install this project "
+            "with `uv pip install -e '.[nes]'` in a dedicated NES environment."
+        ) from exc
+    return MarioSim
 
 
 class GameAdapter(Protocol):
@@ -64,6 +76,15 @@ def _action_name(action) -> str:
     return "/".join(_buttons_name(list(step)) for step in action)
 
 
+@dataclass(frozen=True)
+class SMB1Snapshot:
+    """Emulator state plus wrapper caches required for exact adapter restore."""
+
+    emulator_state: Any
+    info: dict
+    obs: Any
+
+
 class SMB1Adapter:
     """Adapter shim for the current SMB1 `MarioSim`.
 
@@ -75,6 +96,7 @@ class SMB1Adapter:
 
     def __init__(self, world: int = 1, stage: int = 1, *, seed_version: str = "v0",
                  actions=SMB1_ACTIONS, multi_stage: bool = False):
+        MarioSim = _load_mario_sim()
         self.world = int(world)
         self.stage = int(stage)
         self.version = seed_version
@@ -115,10 +137,21 @@ class SMB1Adapter:
         return self._sim.last_obs
 
     def snapshot(self):
-        return self._sim.snapshot()
+        obs = self._sim.last_obs
+        return SMB1Snapshot(
+            emulator_state=self._sim.snapshot(),
+            info=dict(self._sim.last_info),
+            obs=obs.copy() if hasattr(obs, "copy") else obs,
+        )
 
     def restore(self, snap) -> None:
-        self._sim.restore(snap)
+        if not isinstance(snap, SMB1Snapshot):
+            raise TypeError("SMB1Adapter.restore requires an SMB1Snapshot")
+        self._sim.restore(
+            snap.emulator_state,
+            cached_info=snap.info,
+            cached_obs=snap.obs,
+        )
 
     def step(self, action_idx: int):
         obs, info, done = self._sim.step(action_idx)
@@ -286,6 +319,7 @@ class SMA4Adapter:
     MAP_CURSOR_Y = 0x03003DE0
     PROGRESS = 0x03002C52  # per-world clear progress; flips on level completion
     ITEM_MENU_OPEN = 0x03003772
+    MAP_EVENT = 0x03003774  # 0x11 on the live overworld, including stale-cursor exits
 
     # Overworld cursor nodes per (world, stage), discovered via the map probe.
     # Levels gated behind a prior clear list their prerequisites; the meta-planner
@@ -312,7 +346,8 @@ class SMA4Adapter:
             from stable_retro.data import Integrations
         except ImportError as exc:  # pragma: no cover - optional dependency
             raise RuntimeError(
-                "SMA4Adapter requires Stable-Retro. Install with `pip install '.[gba]'`."
+                "SMA4Adapter requires Stable-Retro. Install with "
+                "`uv pip install -e '.[gba]'` in a dedicated GBA environment."
             ) from exc
 
         self.retro = retro
@@ -405,7 +440,8 @@ class SMA4Adapter:
 
     @staticmethod
     def _classify_mode(time: int, cx: int, cy: int, *,
-                       world_raw: int = 0, item_menu_open: int = 0) -> str:
+                       world_raw: int = 0, item_menu_open: int = 0,
+                       map_event: int = 0) -> str:
         """overworld / level / menu from the level timer and the map cursor.
 
         In a level the level timer runs (>0); on the map the timer reads 0 and the
@@ -418,6 +454,11 @@ class SMA4Adapter:
             return "level"
         if item_menu_open:
             return "menu"
+        # Some verified Toad-house exits leave MAP_CURSOR_* off-grid even though
+        # the live World-1 map is already visible. MAP_EVENT=0x11 distinguishes
+        # that overworld state from title/file-select menus.
+        if map_event == 0x11 and (cx or cy):
+            return "overworld"
         if world_raw in (7, 8) and (cx or cy):
             return "overworld"
         if cx % 0x20 == 0 and cy % 0x20 == 0 and (cx or cy):
@@ -432,6 +473,7 @@ class SMA4Adapter:
         cx, cy = self._read_u8(self.MAP_CURSOR_X), self._read_u8(self.MAP_CURSOR_Y)
         world_raw = int(self._read_u8(self.WORLD))
         item_menu_open = int(self._read_u8(self.ITEM_MENU_OPEN))
+        map_event = int(self._read_u8(self.MAP_EVENT))
         return {
             "game_id": self.game_id,
             "level_id": self.level_id,
@@ -450,10 +492,11 @@ class SMA4Adapter:
             "status": "unknown",
             "mode": self._classify_mode(
                 time, cx, cy, world_raw=world_raw,
-                item_menu_open=item_menu_open),
+                item_menu_open=item_menu_open, map_event=map_event),
             "cursor": (cx, cy),
             "cleared": int(self._read_u8(self.PROGRESS)),
             "item_menu_open": item_menu_open,
+            "map_event": map_event,
             "flag_get": False,
             "pspeed": int(base_info.get("pspeed", self._read_u8(self.PSPEED))),
             "speed": int(base_info.get("speed", self._read_u8(self.SPEED))),
@@ -862,7 +905,7 @@ class SMLAdapter:
             from pyboy import PyBoy
         except ImportError as exc:  # pragma: no cover - exercised only without optional dep
             raise RuntimeError(
-                "SMLAdapter requires PyBoy. Install with `pip install '.[sml]'`."
+                "SMLAdapter requires PyBoy. Install with `uv pip install -e '.[sml]'`."
             ) from exc
 
         self.world = int(world)

@@ -16,11 +16,16 @@ def test_acquire_whistle_1_3_solution_schema():
     assert sol["knowledge_tier"] == 2
     assert sol["solved"] is True
     assert sol["replay_verified"] is True
+    assert sol["exit_verified"] is True
+    assert sol["replay_root"]["kind"] == "snapshot"
+    assert len(sol["replay_root"]["sha256"]) == 64
+    assert sol["replay_root"]["rom_sha1"] == sol["rom_sha1"]
     assert sol["inventory_item"] == 0x0C
     assert sol["inventory_after"][0] == 0x0C
     assert sol["n_frames"] == len(sol["path_buttons"])
     assert sol["n_frames"] > 2000
     assert Path(sol["entry_snapshot"]).name == "1-3_pwing_entry.pkl"
+    assert sol["replay_root"]["path"] == sol["entry_snapshot"]
     # Button traces are lists of button-name strings.
     assert all(isinstance(frame, list) for frame in sol["path_buttons"][:5])
     assert any("DOWN" in frame for frame in sol["path_buttons"])

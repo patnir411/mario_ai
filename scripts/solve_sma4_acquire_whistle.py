@@ -168,6 +168,10 @@ def _replay(adapter: SMA4Adapter, buttons: list[tuple[str, ...]], out: Path) -> 
     inv = _inv(adapter)
     if WARP_WHISTLE not in inv:
         raise RuntimeError(f"replay missing whistle: {inv}")
+    if adapter.last_info.get("mode") != "overworld":
+        raise RuntimeError(
+            f"replay acquired whistle but did not exit to overworld: "
+            f"{adapter.last_info}")
     return inv
 
 

@@ -59,8 +59,9 @@ with beam / coverage / Go-Explore as approximate solvers under branching factor
 already settled the empirical claim: **with a forward model, search beats
 standalone learning for Mario**.
 
-Local confirmation: SMB1 any% `beat_game=True` via search; 31/32 stock levels
-solved; SMA4 1-1 and 1-2 replay-verified via adapter search.
+Then-reported cached result (superseded by the July 25 replay audit): SMB1 any%
+`beat_game=True` via search; 31/32 stock levels were called solved; SMA4 1-1
+and 1-2 were replay-verified via adapter search.
 
 ### 1.3 Layer 2 — Reward / potential (why Φ matters)
 
@@ -123,7 +124,8 @@ $$
 \text{search}(\pi,V) \;\Rightarrow\; \text{targets} \;\Rightarrow\; \text{train }(\pi',V') \;\Rightarrow\; \text{guide search}
 $$
 
-V6 measured policy-guided beam on SMB1 1-1: **2.53× node cut** at top-3
+V6 measured policy-guided beam on SMB1 1-1: **60.5% node reduction
+(2.53 plain/guided ratio)** at top-3
 (`scripts/policy_guided_search.py`). Value guidance was functional but gave
 **no** node savings where Φ already solves.
 

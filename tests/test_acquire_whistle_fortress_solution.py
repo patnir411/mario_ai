@@ -16,11 +16,15 @@ def test_acquire_whistle_fortress_solution_schema():
     assert sol["knowledge_tier"] == 2
     assert sol["solved"] is True
     assert sol["replay_verified"] is True
+    assert sol["replay_root"]["kind"] == "snapshot"
+    assert len(sol["replay_root"]["sha256"]) == 64
+    assert sol["replay_root"]["rom_sha1"] == sol["rom_sha1"]
     assert sol["inventory_item"] == 0x0C
     assert sol["inventory_after"][0] == 0x0C
     assert sol["n_frames"] == len(sol["path_buttons"])
     assert sol["n_frames"] > 800
     assert Path(sol["entry_snapshot"]).name == "1-fortress_pwing_leaf_entry.pkl"
+    assert sol["replay_root"]["path"] == sol["entry_snapshot"]
     assert all(isinstance(frame, list) for frame in sol["path_buttons"][:5])
     # Roof route uses UP into the chest room; chest opens with A/B.
     assert any("UP" in frame for frame in sol["path_buttons"])

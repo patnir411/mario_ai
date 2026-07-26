@@ -17,8 +17,9 @@ from __future__ import annotations
 import warnings
 
 import gym_super_mario_bros
-from gym_super_mario_bros.actions import SIMPLE_MOVEMENT
 from nes_py.wrappers import JoypadSpace
+
+from mario.actions import SMB1_ACTIONS
 
 # Canonical action set for the whole project (curated 9 — SIMPLE_MOVEMENT + down/up).
 # Index meaning:
@@ -26,7 +27,7 @@ from nes_py.wrappers import JoypadSpace
 # down: enter down-pipes/warps, crouch under firebars/Bowser. up: climb vines (1-2/4-2
 # warps). The 3 left+jump combos are excluded globally to keep search branching low;
 # levels that need them (8-4 maze) pass a wider `actions=` override.
-ACTIONS = SIMPLE_MOVEMENT + [["down"], ["up"]]
+ACTIONS = SMB1_ACTIONS
 N_ACTIONS = len(ACTIONS)
 
 
@@ -97,8 +98,19 @@ class MarioSim:
         """Opaque in-memory clone of full emulator state. Reusable for many restores."""
         return self.u.dump_state()
 
-    def restore(self, snap) -> None:
+    def restore(self, snap, *, cached_info=None, cached_obs=None) -> None:
+        """Restore an emulator snapshot and, optionally, its Python-side view.
+
+        ``dump_state`` / ``load_state`` only cover emulator state.  ``last_info``
+        and ``last_obs`` are wrapper caches populated by the most recent step, so
+        callers that speculatively step from a snapshot must preserve them
+        separately when exact observational restoration matters.
+        """
         self.u.load_state(snap)
+        if cached_info is not None:
+            self._last_info = dict(cached_info)
+        if cached_obs is not None:
+            self._last_obs = cached_obs.copy() if hasattr(cached_obs, "copy") else cached_obs
 
     # --- stepping ----------------------------------------------------------
     def step(self, action_idx: int):

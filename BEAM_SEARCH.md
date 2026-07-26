@@ -5,6 +5,10 @@ emulator. This is the teaching companion to `mario/search.py`. Architecture cont
 `DESIGN.md`; live project status is in `CLAUDE.md`.
 
 All numbers here are from the canonical V0 run `runs/20260603-130253-v0_1_1` on an M2 Pro.
+V0 used the historical seven-action `SIMPLE_MOVEMENT` vocabulary. The current
+persisted schema has nine actions (adding `down` and `up`); see
+`mario/actions.py`. The seven-action branching arithmetic below explains the
+historical run and is not a description of current defaults.
 
 ---
 
@@ -46,7 +50,7 @@ beam = [ root_state ]                      # one node: start of the level
 repeat until a node reaches the flag, or max depth:
     candidates = []
     for node in beam:                      # W nodes
-        for action in 7 actions:           # B = branching factor
+        for action in 7 historical actions:# B = V0 branching factor
             restore(node.snapshot)         # rewind to this node  (~11 µs)
             info = run action for 8 frames  # frame-skip "chunk"   (~5.8 ms)
             if reached flag:  return success(node.path + [action])
@@ -69,7 +73,7 @@ The three load-bearing lines:
 | Concept | In the code |
 |---|---|
 | beam width `W` | `beam_width` (V0 used **48**) |
-| branching `B` | `N_ACTIONS` = **7** (`SIMPLE_MOVEMENT`) |
+| branching `B` | **7** in V0 (`SIMPLE_MOVEMENT`); current `N_ACTIONS` is 9 |
 | action chunk | `chunk_frames` = **8** (hold one action 8 frames) |
 | node state | `Node(snap, score, info, path, x_max, stuck, frames)` |
 | rewind | `sim.restore(node.snap)` |
@@ -85,7 +89,7 @@ The three load-bearing lines:
 What actually happened in `runs/20260603-130253-v0_1_1`:
 
 - **Start:** beam = one node, Mario at x≈40.
-- **Each round** expands the 48 beam nodes × 7 actions = 336 candidates, each simulated 8
+- **Each V0 round** expands the 48 beam nodes × 7 historical actions = 336 candidates, each simulated 8
   frames forward, scored, deduped, pruned back to 48.
 - **Progress was dead-linear:** ~24 px of rightward progress per round (≈ max run speed),
   with zero deaths surviving in the beam — because the death penalty (`-10000`) instantly
@@ -114,7 +118,7 @@ nodes evaluated  =  W × B × D
 ```
 
 - `W` = beam width = 48
-- `B` = branching = 7
+- `B` = historical V0 branching = 7 (current default = 9)
 - `D` = depth (decisions to the goal) ≈ 134
 
 → 48 × 7 × 134 ≈ **45,000** (measured 42,269 — slightly less due to dedup + early stop).

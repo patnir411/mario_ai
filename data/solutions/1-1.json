@@ -166,5 +166,6 @@
     5
   ],
   "solved": true,
-  "by": "net"
+  "by": "net",
+  "chunk_frames": 8
 }

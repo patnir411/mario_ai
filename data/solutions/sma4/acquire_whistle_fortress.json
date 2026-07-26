@@ -6,6 +6,15 @@
   "knowledge_tier": 2,
   "solved": true,
   "replay_verified": true,
+  "rom_sha1": "532f3307021637474b6dd37da059ca360f612337",
+  "replay_root": {
+    "game_id": "sma4",
+    "kind": "snapshot",
+    "level_id": "1-fortress",
+    "path": "runs/sma4_cache/1-fortress_pwing_leaf_entry.pkl",
+    "rom_sha1": "532f3307021637474b6dd37da059ca360f612337",
+    "sha256": "a4ec81b3c31f251654eac8a0a0dd18761088d66ccdddffbdcb2476b04b8813ea"
+  },
   "inventory_item": 12,
   "inventory_after": [
     12,

@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from mario.buffer import DatasetIndex
-from mario.env import N_ACTIONS
+from mario.actions import SMB1_N_ACTIONS as N_ACTIONS
 from mario.io import new_run_id, run_dir, write_json_atomic
 from mario.policy import MarioPolicy, save_checkpoint
 
@@ -90,6 +90,9 @@ def mps_parity(net, X32) -> dict:
 
 def main() -> None:
     K = 4
+    seed = int(os.environ.get("TRAIN_SEED", "0"))
+    np.random.seed(seed)
+    torch.manual_seed(seed)
     # Warm-start (DAgger fine-tuning): continue from a prior checkpoint with a lower LR and
     # fewer epochs so small correction sets actually adjust the policy without high-variance
     # retrain-from-scratch wiping out earlier-level competence.
@@ -109,7 +112,7 @@ def main() -> None:
         level_ids = {w * 10 + s}
     ds = DatasetIndex(manifest, K=K, level_ids=level_ids)
     print(f"level_filter={lf or 'ALL'}")
-    val_tids = _val_trajectories(ds)
+    val_tids = _val_trajectories(ds, seed=seed)
     train_mask, val_mask = ds.split(val_tids)
     print(f"device={device} samples={len(ds)} train={int(train_mask.sum())} "
           f"val={int(val_mask.sum())} K={K} warm_start={warm}")
@@ -134,7 +137,7 @@ def main() -> None:
         for ep in range(epochs):
             net.train()
             tl = tce = nb = 0.0
-            for b in ds.iter_batches(batch, mask=train_mask, shuffle=True, seed=ep):
+            for b in ds.iter_batches(batch, mask=train_mask, shuffle=True, seed=seed + ep):
                 loss, ce, _sce, _vl = _loss(net, b, device)
                 opt.zero_grad(); loss.backward(); opt.step()
                 tl += float(loss); tce += float(ce); nb += 1
@@ -173,7 +176,7 @@ def main() -> None:
     val_metrics = {"val_ce": round(best_val, 4)}
     save_checkpoint(d / "checkpoint.pt", net, chunk_frames=ds.manifest.get("chunk_frames", 8),
                     train_cfg={"K": K, "epochs": epochs, "batch": batch, "lr": lr,
-                               "n_params": n_params, "device": device},
+                               "n_params": n_params, "device": device, "seed": seed},
                     val_metrics=val_metrics)
     print(f"saved {d/'checkpoint.pt'} | params={n_params} val_ce={best_val:.3f}")
     print(f"mps_parity: {parity}")

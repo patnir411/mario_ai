@@ -1,18 +1,20 @@
 """Tiny student policy: K-frame-stack MLP with policy + value heads.
 
-Input = K stacked observe() vectors (K restores the Markov property that enemy-slot reuse
-breaks). Outputs 7 chunk logits + 1 value. The Controller wraps a trained net as a
+Input = K stacked observe() vectors (K supplies recent context omitted by one
+observation; it is not assumed to make the representation fully Markov).
+Outputs 9 chunk logits + 1 value. The Controller wraps a trained net as a
 real-time controller: one act() per chunk, argmax action fed to MarioSim.run_chunk.
 """
 from __future__ import annotations
 
 from collections import deque
+from pathlib import Path
 
 import numpy as np
 import torch
 import torch.nn as nn
 
-from mario.env import N_ACTIONS  # single source of truth (curated 9-action set)
+from mario.actions import SMB1_N_ACTIONS as N_ACTIONS
 from mario.observation import OBS_DIM, observe
 
 
@@ -21,6 +23,7 @@ class MarioPolicy(nn.Module):
         super().__init__()
         self.K = K
         self.hidden = list(hidden)
+        self.dropout = float(dropout)
         d = K * OBS_DIM
         layers: list[nn.Module] = []
         for h in hidden:
@@ -37,9 +40,17 @@ class MarioPolicy(nn.Module):
 
 def save_checkpoint(path, net: MarioPolicy, *, chunk_frames: int, train_cfg: dict,
                     val_metrics: dict) -> None:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
     torch.save({
         "state_dict": net.state_dict(),
-        "arch": {"type": "mlp", "K": net.K, "obs_dim": OBS_DIM, "hidden": net.hidden},
+        "arch": {
+            "type": "mlp",
+            "K": net.K,
+            "obs_dim": OBS_DIM,
+            "hidden": net.hidden,
+            "dropout": net.dropout,
+        },
         "chunk_frames": chunk_frames,
         "train_cfg": train_cfg,
         "val_metrics": val_metrics,
@@ -47,12 +58,26 @@ def save_checkpoint(path, net: MarioPolicy, *, chunk_frames: int, train_cfg: dic
 
 
 def load_policy(path, device="cpu"):
-    ckpt = torch.load(path, map_location=device, weights_only=False)
+    safe_numpy = [
+        np._core.multiarray.scalar,
+        np.dtype,
+        type(np.dtype(np.float64)),
+    ]
+    with torch.serialization.safe_globals(safe_numpy):
+        ckpt = torch.load(path, map_location=device, weights_only=True)
     a = ckpt["arch"]
-    net = MarioPolicy(K=a["K"], hidden=tuple(a["hidden"]))
+    if int(a.get("obs_dim", OBS_DIM)) != OBS_DIM:
+        raise ValueError(
+            f"policy obs_dim {a.get('obs_dim')} does not match current {OBS_DIM}")
+    net = MarioPolicy(
+        K=a["K"],
+        hidden=tuple(a["hidden"]),
+        dropout=float(a.get("dropout", 0.1)),
+    )
     net.load_state_dict(ckpt["state_dict"])
     net.to(device).eval()
-    return net, ckpt
+    metadata = {key: value for key, value in ckpt.items() if key != "state_dict"}
+    return net, metadata
 
 
 # Inference bias: under uncertainty (near-uniform logits) plain argmax ties to index 0

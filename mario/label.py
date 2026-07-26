@@ -1,7 +1,7 @@
 """Teacher-labeling primitive — the bridge from search to a learnable dataset.
 
 `beam_search` only returns the single winning path. For distillation (V2) and DAgger
-(V3) we need, at an ARBITRARY state, a soft distribution over the 7 actions plus a
+(V3) we need, at an ARBITRARY state, a soft distribution over the 9 actions plus a
 value. Snapshots aren't picklable across processes, but action-path PREFIXES are — and
 the emulator is deterministic — so we reconstruct any state by replaying its prefix,
 then evaluate each action by a short lookahead.
@@ -33,10 +33,10 @@ _NEG = -1e18
 @dataclass
 class LabelResult:
     best_action: int
-    soft_targets: np.ndarray      # float32[7], sums to 1
+    soft_targets: np.ndarray      # float32[N_ACTIONS], sums to 1
     value: float                  # max_a q[a]  (expert value of this state)
-    per_action_value: np.ndarray  # float32[7], raw q
-    reachable: np.ndarray         # bool[7], False = action leads to immediate death
+    per_action_value: np.ndarray  # float32[N_ACTIONS], raw q
+    reachable: np.ndarray         # bool[N_ACTIONS], False = immediate death
     obs: np.ndarray               # float32[OBS_DIM], observe() at the labeled state
     all_doomed: bool              # True iff every action is fatal/doomed (exclude these)
 
@@ -143,6 +143,41 @@ def label_state(world: int, stage: int, action_path_prefix, *, chunk_frames: int
                        all_doomed=all_doomed)
 
 
+def label_at_state(sim: MarioSim, x_start: int, *, chunk_frames: int = 8,
+                   tau: float = 40.0, weights: RewardWeights = DEFAULT):
+    """1-ply fatal-masked soft targets + value for the sim's CURRENT state.
+
+    Assumes `sim` is already positioned at the target state. Snapshots/restores internally
+    and leaves the sim restored to that exact state, so the caller can read any observation
+    representation (production tile-obs OR the entity tokens) before and after. Does NOT
+    compute obs itself — that's the caller's choice of representation.
+
+    Returns (soft[N_ACTIONS], value, best_action, all_doomed, q[N_ACTIONS]).
+    """
+    s0 = sim.snapshot()
+    info0 = dict(sim.last_info)
+    obs0 = None if sim.last_obs is None else np.asarray(sim.last_obs).copy()
+    q = np.full(N_ACTIONS, _NEG, dtype=np.float64)
+    try:
+        for a in range(N_ACTIONS):
+            sim.restore(s0)
+            info, done = sim.run_chunk(a, chunk_frames)
+            if is_success(info):
+                q[a] = weights.flag + weights.progress * (int(info.get("x_pos", 0)) - x_start)
+            elif is_death(info, done):
+                q[a] = -weights.death
+            else:
+                q[a] = state_score(info, x_start, chunk_frames, died=False, stuck=0, w=weights)
+    finally:
+        # load_state restores the emulator but not MarioSim's cached info/frame.
+        # Restore both views even if a speculative action raises.
+        sim.restore(s0, cached_info=info0, cached_obs=obs0)
+    ex = np.exp((q - q.max()) / tau)
+    soft = (ex / ex.sum()).astype(np.float32)
+    all_doomed = bool((q <= -weights.death / 2).all())
+    return soft, float(q.max()), int(np.argmax(q)), all_doomed, q.astype(np.float32)
+
+
 def fast_label(world: int, stage: int, action_path_prefix, *, chunk_frames: int = 8,
                tau: float = 40.0, weights: RewardWeights = DEFAULT, seed: int = 0,
                sim: MarioSim | None = None):
@@ -150,7 +185,7 @@ def fast_label(world: int, stage: int, action_path_prefix, *, chunk_frames: int 
 
     ~7 chunks/state vs ~1000 for label_state. Used for large-scale dataset generation
     where the HARD label (from a search trajectory) is the primary signal and soft targets
-    only need to mask fatal actions. Returns (obs, soft[7], value, all_doomed).
+    only need to mask fatal actions. Returns (obs, soft[N_ACTIONS], value, all_doomed).
     """
     own = sim is None
     if own:
@@ -162,23 +197,11 @@ def fast_label(world: int, stage: int, action_path_prefix, *, chunk_frames: int 
             break
     x_start = int(sim.last_info.get("x_pos", 0))
     obs = observe(sim.ram, sim.last_info)
-    s0 = sim.snapshot()
-    q = np.full(N_ACTIONS, _NEG, dtype=np.float64)
-    for a in range(N_ACTIONS):
-        sim.restore(s0)
-        info, done = sim.run_chunk(a, chunk_frames)
-        if is_success(info):
-            q[a] = weights.flag + weights.progress * (int(info.get("x_pos", 0)) - x_start)
-        elif is_death(info, done):
-            q[a] = -weights.death
-        else:
-            q[a] = state_score(info, x_start, chunk_frames, died=False, stuck=0, w=weights)
+    soft, value, _best, all_doomed, _q = label_at_state(
+        sim, x_start, chunk_frames=chunk_frames, tau=tau, weights=weights)
     if own:
         sim.close()
-    ex = np.exp((q - q.max()) / tau)
-    soft = (ex / ex.sum()).astype(np.float32)
-    all_doomed = bool((q <= -weights.death / 2).all())
-    return obs.astype(np.float32), soft, float(q.max()), all_doomed
+    return obs.astype(np.float32), soft, value, all_doomed
 
 
 def soft_entropy(soft: np.ndarray) -> float:

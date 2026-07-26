@@ -10,8 +10,6 @@ from pathlib import Path
 
 import pytest
 
-from mario.env import MarioSim
-
 GOLDEN = Path(__file__).parent / "golden" / "ram_hashes.json"
 
 
@@ -34,11 +32,11 @@ def canonical_actions(n: int = 200) -> list[int]:
     return seq
 
 
-def ram_hash(sim: MarioSim) -> str:
+def ram_hash(sim) -> str:
     return hashlib.sha256(sim.ram.tobytes()).hexdigest()
 
 
-def run_sequence(sim: MarioSim, actions: list[int], checkpoints=None):
+def run_sequence(sim, actions: list[int], checkpoints=None):
     """Step `actions` one frame each, stopping early if the episode ends.
 
     Returns (final_hash, {step: hash at checkpoints}, done_at, done). Stopping on
@@ -63,6 +61,10 @@ def run_sequence(sim: MarioSim, actions: list[int], checkpoints=None):
 
 @pytest.fixture
 def sim():
+    try:
+        from mario.env import MarioSim
+    except ImportError:
+        pytest.skip("NES emulator extra is not installed")
     s = MarioSim(world=1, stage=1)
     s.reset(seed=0)
     yield s

@@ -16,7 +16,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 RUNS = ROOT / "runs"
 
-_FINGERPRINT_PKGS = ["gym-super-mario-bros", "nes-py", "gymnasium", "numpy", "torch"]
+_FINGERPRINT_PKGS = [
+    "gym-super-mario-bros",
+    "nes-py",
+    "stable-retro",
+    "pyboy",
+    "gymnasium",
+    "numpy",
+    "torch",
+]
 
 
 def write_json_atomic(path: str | Path, obj) -> Path:
@@ -52,10 +60,12 @@ def git_rev() -> str:
             ["git", "rev-parse", "--short", "HEAD"], cwd=ROOT,
             stderr=subprocess.DEVNULL,
         ).decode().strip()
-        dirty = subprocess.call(
-            ["git", "diff", "--quiet"], cwd=ROOT, stderr=subprocess.DEVNULL,
+        status = subprocess.check_output(
+            ["git", "status", "--porcelain", "--untracked-files=normal"],
+            cwd=ROOT,
+            stderr=subprocess.DEVNULL,
         )
-        return rev + ("-dirty" if dirty else "")
+        return rev + ("-dirty" if status.strip() else "")
     except Exception:
         src = sorted(ROOT.glob("mario/*.py")) + sorted(ROOT.glob("scripts/*.py"))
         h = hashlib.sha256()

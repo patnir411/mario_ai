@@ -107,5 +107,6 @@
     2
   ],
   "solved": true,
-  "by": "search"
+  "by": "search",
+  "chunk_frames": 8
 }

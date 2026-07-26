@@ -1,11 +1,13 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "mario_ai"
 version = "0.1.0"
-description = "Local AI that plays/beats/speedruns Super Mario Bros (NES) via forward-model search + distillation + DAgger"
+description = "Emulator-backed search and learned control for Mario games across NES, GB, and GBA"
 requires-python = ">=3.13"
 dependencies = [
-    "gym-super-mario-bros==8.0.0",
-    "nes-py==9.0.0",
     "gymnasium>=1.0.0",
     "numpy>=2.0",
     "torch>=2.4",
@@ -17,8 +19,23 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+nes = [
+    "gym-super-mario-bros==8.0.0",
+    "nes-py==9.0.0",
+]
 sml = ["pyboy>=2.7.0,<2.8"]
 gba = ["stable-retro==1.0.1"]
+
+[tool.uv]
+# These emulator stacks impose disjoint pyglet ranges:
+# nes-py 9.0.0 requires pyglet<=1.5.21, while stable-retro 1.0.1 requires
+# pyglet>=1.5.27,<2. Keep them in separate environments.
+conflicts = [
+    [
+        { extra = "nes" },
+        { extra = "gba" },
+    ],
+]
 
 [tool.setuptools]
 packages = ["mario"]

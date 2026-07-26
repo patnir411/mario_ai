@@ -2,109 +2,126 @@
 
 > 🎮 **[Interactive explainer & walkthrough →](https://storage.googleapis.com/learn-mario-ai-422ee6/index.html?v=2)** — a visual, end-to-end tour of this project: the search→distill→DAgger journey, the hard-level debugging stories, and how each idea maps to an ML research interview. Made for fun, out of curiosity.
 
-A from-scratch AI that **beats and speedruns Super Mario Bros (NES)**, running entirely locally
-on an Apple-silicon Mac. It uses the emulator itself as a forward model — deterministic
-snapshot/restore over `gym-super-mario-bros` / `nes-py` — searched with beam + Go-Explore and a
-global progress potential, with the hardest levels routed via 6502-disassembly analysis, then
-distilled into compact neural policies. Every result is backed by an artifact: a replayable action
-sequence, a passing test, and a human-readable contact-sheet PNG.
+A from-scratch research system for solving Mario games locally on an Apple-silicon Mac. Its
+strongest result is exact forward-model search over emulator snapshots: beam/coverage search,
+mechanic-aware routing, and replay-gated action sequences. Learned policies are being tested as
+search guides rather than assumed to replace the solver. Cross-game work uses emulator adapters,
+and the current Super Mario Advance 4 (SMA4) route work is a segmented option-planning prototype.
+
+The evidence standard is deliberately strict: a game result is positive only after independent
+replay reaches the terminal condition. As of **2026-07-25**, SMB1 stock coverage is **30/32
+replay-verified**. Level 6-2 remains unsolved and 6-3 is quarantined after its seed-0 replay failed.
 
 ## Highlights
 
 - **any% — the full game is beaten, 8/8 (`beat_game=True`):** 1-1 → 1-2 → 4-1 → 4-2 → 8-1 → 8-2 → 8-3 → 8-4.
-- **Every hard level solved from scratch** — the underwater side-pipe levels (2-2, 7-2) and all
-  three castles, including **7-4** (the notorious 6-gate multi-loop) and **8-4** (a down-pipe chain
-  through water to Bowser and the axe).
-- **16 distinct levels solved**, stitched into a single back-to-back showcase video.
-- A **distilled neural policy** clears 1-1, and the full **search → distill → DAgger** learning
-  pipeline is implemented end-to-end.
-- **Fully verified & reproducible:** deterministic seeds, `render.replay` `beat=True` per solution,
-  contact sheets, and a green pytest suite.
+- **30/32 stock SMB1 levels replay-verified**, including the underwater side-pipe routes and the
+  difficult 4-4, 7-4, and 8-4 castle routes.
+- The full **search → distill → DAgger** research path is implemented, including entity-centric
+  policies, held-out split checks, input-consistency regularization, and policy-guided search.
+- On one local SMB1 1-1 benchmark, a learned prior preserved the solve while reducing beam
+  expansions from **7005 to 2770 nodes (60.5% fewer; 2.53 plain/guided ratio)**. This is a single-level result; the local
+  checkpoint and training rows do not yet have clean-clone training provenance.
+- An adapter layer supports NES SMB1, GB Super Mario Land, and GBA SMA4 experiments without
+  putting game-specific RAM assumptions in the generic search API.
 
 ## Results
 
-| Level(s) | Type | Method |
+| Result | Status | Method / evidence |
 |---|---|---|
-| 1-1 | overworld | learned net (BC + DAgger) / beam |
-| 1-2, 1-3, 2-1 | overworld | beam search |
-| 1-4 | castle | beam search |
-| 2-2, 7-2 | underwater | hold-right side-pipe entry + area beam |
-| 4-1 | overworld | beam search |
-| 4-2 | warp-zone maze | Go-Explore (`coverage_search`) |
-| 4-4 | castle (height maze) | gate-aware Go-Explore (lower-path descent) |
-| 7-4 | castle (6-gate multi-loop) | per-triplet segmented search |
-| 8-1, 8-2, 8-3 | overworld | beam search |
-| 8-4 | castle → water → Bowser | down-pipe chain + side-pipe + axe beam |
+| SMB1 any% | 8/8, `beat_game=True` | cached segments replayed as one route |
+| SMB1 stock set | 30/32 replay-verified | `data/solutions/[1-8]-[1-4].json` |
+| SMB1 6-2 | unsolved | retained as an explicit negative |
+| SMB1 6-3 | quarantined | prior candidate died during seed-0 replay |
+| 1-1 learned search prior | 7005 → 2770 nodes | `notes/artifacts/2026-07-25-policy-guided-1-1.json`; training provenance incomplete |
+| SMA4 whistle route | segmented prototype | independently restored level/overworld segments plus declared interventions |
 
-Cached solutions live in `data/solutions/*.json` (action sequences, replayable from reset); visual
-proof in `runs/*_solved_contact.png`; full playthroughs via `scripts/stitch_solutions.py`.
+Small canonical solution manifests live under `data/solutions/`. Generated datasets, checkpoints,
+videos, contact sheets, and run reports remain local under ignored paths unless deliberately
+promoted as small evidence artifacts.
 
 ## How it works
 
-**Forward-model search.** The NES emulator is wrapped (`mario/env.py`) to expose exact
-snapshot/restore and chunked stepping, making it a perfect deterministic forward model. On top of
-it:
+**Forward-model search.** The emulator supplies snapshot/restore and chunked stepping. Search
+remains the solver:
 
-- `beam_search` — width-bounded best-first search scored by a **global progress potential Φ**
-  (`area_seq*K + (x − area_entry_x)`), so pipe/area transitions read as forward progress.
-- `coverage_search` — beam + **Go-Explore** (cell archive over `(area, x-tile, y-tile)` + novelty),
-  which cracks vertical/maze levels where a plain beam stalls.
+- `beam_search` — a width-bounded frontier ranked by a progress/death heuristic. The project uses
+  potential-inspired progress features; it does not claim the formal guarantee of
+  potential-based reward shaping.
+- `coverage_search` — a **Go-Explore-style** beam/archive hybrid (cell coverage
+  over `(area, x-tile, y-tile)` plus novelty), useful on vertical and deceptive
+  routes where a narrow beam stalls. It is not the full Go-Explore algorithm.
 - `search_from_state` — beam from any live state, used for in-run rescue.
-- A value network (`mario/value.py`) for value-guided best-first search (ExIt-style).
+- Optional learned policy/value signals order or softly bias expansions. Hard top-k pruning is
+  experimental because an inaccurate prior can remove the only successful action.
 
 **Disassembly-grounded routing.** The castle/water levels are gated by exact engine mechanics, so
 they are routed against the SMB 6502 disassembly: `HandlePipeEntry`'s pipe-top metatile predicate,
 `ProcLoopCommand`'s height-gates, and 7-4's multi-loop counters — turned into mechanic-aware search
 shaping.
 
-**Reliable transition detection.** Because the wrapper fast-forwards pipe/area transitions inside a
-step, transitions are detected from a per-frame live-RAM x-jump (or raw `nes_py` frames) rather than
-post-step RAM — the key signal that unlocked the underwater and castle routes.
+**Adapters and options.** `mario.adapters.GameAdapter` isolates emulator-specific state, progress,
+and terminal semantics. The SMA4 lane combines level and overworld adapters with an option library
+and a symbolic meta-planner. It is not yet one continuous Option-SMDP execution: several segments
+start from independent cached states, and power/cursor/map interventions must still be removed or
+reported. See `notes/sessions/2026-07-25-project-audit-and-next-steps.md`.
 
-**Verification spine.** `scripts/update_status.py` regenerates a status block from `runs/status.json`;
-every solution is re-validated by `mario/render.replay` and a contact sheet; `pytest` guards
-determinism, snapshot exactness, reward invariants, and the transition detector.
+**Verification spine.** `mario.solution_verification` and
+`scripts/verify_stock_solutions.py` replay the canonical stock manifests. Cross-game CLI promotion
+also requires an independent replay before a run may replace a canonical solution. Tests cover
+snapshot determinism, restore integrity, reward/search contracts, adapter behavior, and publishing
+gates.
 
 ## Learning pipeline
 
-The search acts as an expert teacher that is distilled into small policies:
+Search supplies labels to compact policies:
 
-- **Observation** (`mario/observation.py`) — a compact, ego-centric, position-free state
-  (tile grid + scalars) that generalizes across levels.
+- **Observation** (`mario/observation.py`, `mario/entity.py`) — ego-centric tile/scalar features or
+  structured player/enemy/terrain tokens.
 - **Distillation** (`mario/label.py`, `mario/buffer.py`, `mario/train.py`) — search trajectories +
-  perturb-and-recover coverage are labeled and behavior-cloned into a `MarioPolicy`; **DAgger**
-  (`scripts/run_dagger.py`) adds closed-loop corrections.
-- **Structured policy research** (`scripts/exp_entity.py`) — an object-centric schema
-  (`{player, enemies, terrain}` tokens) fed to a tiny ~150K-param **entity-transformer** with a
-  single-token action head, trainable in minutes on the M2 and fast enough to control in real time —
-  the vehicle for cross-level / cross-game generalization.
+  perturb-and-recover coverage are behavior-cloned; DAgger drivers add learner-distribution
+  corrections.
+- **Input consistency** (`mario/consistency.py`) — penalizes policy-output changes under small input
+  perturbations. This is a sensitivity surrogate, not Stable-BC's closed-loop dynamics criterion.
+- **Search guidance** (`mario/entity_policy.py`, `mario/search.py`) — policy priors can bias
+  expansion while the exact emulator still decides outcomes.
 
-See `V4_FINDINGS.md` for the consolidated write-up, including the cross-game ("any Mario game")
-feasibility and cost/time analysis.
+`V5_FINDINGS.md` and `V6_FINDINGS.md` preserve the generalist-policy experiments and the pivot to
+learned search guidance, including their current provenance limits.
 
 ## Repository layout
 
-- `mario/` — env wrapper, RAM map, search family, reward, observation, policy, value net, renderer,
-  multi-stage runner.
-- `scripts/` — per-level solvers (`solve_84_*.py`, `solve_castle.py`, `solve_44_*.py`,
-  `solve_74_seg2.py`, …), dataset/training (`gen_dataset.py`, `run_dagger.py`, `exp_entity.py`),
-  `stitch_solutions.py`, `update_status.py`.
-- `tests/` — determinism, snapshot exactness, reward invariants, transition detector (pytest).
+- `mario/` — emulator wrappers/adapters, search, RAM/entity observations, policies, verification,
+  options, and meta-planning.
+- `scripts/` — SMB1 solvers and replay tools, learning experiments, SML/SMA4 drivers, benchmarks,
+  and status/verification commands.
+- `data/solutions/` — small canonical replay manifests; ROMs and large generated data are ignored.
+- `tests/` — deterministic core, learning/data integrity, adapter/option, and CLI publishing tests.
 - `CLAUDE.md` — curated working narrative + live status; `DESIGN.md` — architecture;
   `BEAM_SEARCH.md`, `*_FINDINGS.md` — deep dives.
 
 ## Setup
 
+The NES and GBA stacks require incompatible `pyglet` versions, so use separate environments.
+
 ```bash
-uv venv --python 3.13 venv          # native arm64 (x86/Rosetta python disables torch MPS)
-./venv/bin/pip install -e .         # gym-super-mario-bros 8.0 / nes-py 9.0 / torch
+# NES / SMB1
+uv venv --python 3.13 venv
+uv pip install --python venv/bin/python -e '.[nes,dev]'
 PYTORCH_ENABLE_MPS_FALLBACK=1 ./venv/bin/python -m pytest -q
+
+# GBA SMA4 + GB Super Mario Land (separate from NES)
+uv venv --python 3.13 venv-gba
+uv pip install --python venv-gba/bin/python -e '.[gba,sml,dev]'
 ```
 
 ## Usage
 
 ```bash
-# Stitch the full any% playthrough (replays cached solutions; beat_game=True)
+# Replay-gate all 32 stock manifests; currently expects 30 positives
+./venv/bin/python scripts/verify_stock_solutions.py --expect-verified 30
+
+# Stitch the verified any% playthrough (beat_game=True)
 PYTORCH_ENABLE_MPS_FALLBACK=1 ./venv/bin/python scripts/stitch_solutions.py "any%"
 
 # Solve a level from scratch (search) — e.g. a castle
@@ -117,5 +134,5 @@ PYTORCH_ENABLE_MPS_FALLBACK=1 ./venv/bin/python -m mario.eval <run_id> 5 1-1
 ```
 
 > The SMB ROM ships with the `gym-super-mario-bros` package and is **not** in this repo.
-> Large artifacts (`venv/`, videos, datasets, model weights) are gitignored; the small,
-> replayable solution JSONs and contact sheets are committed.
+> GBA/GB ROMs stay local under ignored `roms/`. Environments, videos, datasets, model weights,
+> savestates, and run outputs are also ignored.

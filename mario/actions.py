@@ -1,21 +1,43 @@
-"""Action-chunk vocabulary for search and (later) the policy.
+"""Emulator-free action vocabularies shared across Mario backends.
 
-A "chunk" = hold one SIMPLE_MOVEMENT action for `chunk_frames` frames (frame-skip).
-This is the single biggest lever on search tractability (DESIGN.md §5): branching stays
-at 7 and a depth-d beam covers d*chunk_frames frames. Larger chunks = shallower search
-but coarser control; 1-1 is forgiving enough for chunk_frames=8.
-
-Index meaning (mario.env.ACTIONS == SIMPLE_MOVEMENT):
-  0 NOOP, 1 right, 2 right+A, 3 right+B, 4 right+A+B, 5 A, 6 left
+Action indices are part of every saved trajectory's schema.  Keeping the SMB1
+vocabulary in a dependency-free module lets search/adapters inspect that schema
+without importing the optional NES emulator stack, while ``mario.env`` passes
+the exact same list to ``JoypadSpace``.
 """
 from __future__ import annotations
 
-from mario.env import ACTIONS, N_ACTIONS  # noqa: F401  (re-exported)
 
+# gym-super-mario-bros SIMPLE_MOVEMENT plus DOWN/UP.  Never reorder these
+# entries: committed SMB1 solution manifests store their integer indices.
+SMB1_ACTIONS: list[list[str]] = [
+    ["NOOP"],
+    ["right"],
+    ["right", "A"],
+    ["right", "B"],
+    ["right", "A", "B"],
+    ["A"],
+    ["left"],
+    ["down"],
+    ["up"],
+]
+SMB1_N_ACTIONS = len(SMB1_ACTIONS)
+
+# Backward-compatible public names used by older experiment scripts.
+ACTIONS = SMB1_ACTIONS
+N_ACTIONS = SMB1_N_ACTIONS
 DEFAULT_CHUNK_FRAMES = 8
-
-ACTION_NAMES = ["NOOP", "right", "right+A", "right+B", "right+A+B", "A", "left",
-                "down", "up"]
+ACTION_NAMES = [
+    "NOOP",
+    "right",
+    "right+A",
+    "right+B",
+    "right+A+B",
+    "A",
+    "left",
+    "down",
+    "up",
+]
 
 
 def action_name(idx: int) -> str:

@@ -4,7 +4,13 @@ import json
 
 import numpy as np
 
-from mario.adapters import SMA4Adapter, SMA4_PHYSICS_ACTIONS, SMA4_PSPEED_ACTIONS
+from mario import adapters
+from mario.adapters import (
+    SMA4Adapter,
+    SMA4_PHYSICS_ACTIONS,
+    SMA4_PSPEED_ACTIONS,
+    SMB1Adapter,
+)
 from mario.render import make_contact_sheet_adapter
 from mario.search import (_adapter_physics_cell, beam_search_adapter,
                           coverage_search_adapter, goal_suffix_search)
@@ -89,6 +95,75 @@ class FakeAdapter:
 
     def cell(self, tile: int = 16):
         return self.game_id, self.x // tile, self.y // tile, self.dead
+
+
+class FakeMarioSim:
+    def __init__(self, *_args, **_kwargs):
+        self.x = 0
+        self._last_info = {"x_pos": 0, "y_pos": 0, "status": "small"}
+        self._last_obs = np.asarray([0])
+
+    def reset(self, seed=0):
+        del seed
+        self.x = 0
+        self._last_info = {"x_pos": 0, "y_pos": 0, "status": "small"}
+        self._last_obs = np.asarray([0])
+        return dict(self._last_info)
+
+    def close(self):
+        pass
+
+    @property
+    def ram(self):
+        return b""
+
+    @property
+    def last_info(self):
+        return self._last_info
+
+    @property
+    def last_obs(self):
+        return self._last_obs
+
+    def snapshot(self):
+        return self.x
+
+    def restore(self, state, *, cached_info=None, cached_obs=None):
+        self.x = state
+        if cached_info is not None:
+            self._last_info = dict(cached_info)
+        if cached_obs is not None:
+            self._last_obs = cached_obs.copy()
+
+    def step(self, action_idx):
+        del action_idx
+        self.x += 20
+        self._last_info = {
+            "x_pos": self.x, "y_pos": 0, "status": "small"}
+        self._last_obs = np.asarray([self.x])
+        return self._last_obs, dict(self._last_info), False
+
+    def run_chunk(self, action_idx, frames):
+        info = self._last_info
+        for _ in range(frames):
+            _obs, info, _done = self.step(action_idx)
+        return info, False
+
+
+def test_smb1_adapter_snapshot_restores_info_obs_and_cell(monkeypatch):
+    monkeypatch.setattr(adapters, "_load_mario_sim", lambda: FakeMarioSim)
+    adapter = SMB1Adapter()
+    adapter.reset()
+    adapter.step(1)
+    snap = adapter.snapshot()
+    adapter.step(1)
+    assert adapter.last_info["x_pos"] == 40
+
+    adapter.restore(snap)
+
+    assert adapter.last_info["x_pos"] == 20
+    assert adapter.last_obs.tolist() == [20]
+    assert adapter.cell(tile=16)[2] == 1
 
 
 def test_adapter_beam_solves_with_adapter_contract():

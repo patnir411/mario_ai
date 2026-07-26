@@ -6,6 +6,15 @@
   "knowledge_tier": 2,
   "solved": true,
   "replay_verified": true,
+  "rom_sha1": "532f3307021637474b6dd37da059ca360f612337",
+  "replay_root": {
+    "game_id": "sma4",
+    "kind": "snapshot",
+    "level_id": "1-3",
+    "path": "runs/sma4_cache/1-3_pwing_entry.pkl",
+    "rom_sha1": "532f3307021637474b6dd37da059ca360f612337",
+    "sha256": "0436e0af39b25fc378592cf386c673119a4a8a5df3fdca59097abae7a762bd6d"
+  },
   "inventory_item": 12,
   "inventory_after": [
     12,

@@ -9,6 +9,8 @@ doomed-but-high-progress branches — the "shallow search behaves deep" goal (DE
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -33,17 +35,38 @@ class ValueNet(nn.Module):
 
 
 def save_value(path, net: ValueNet, val_metrics: dict) -> None:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    val_metrics = {
+        key: value.item() if isinstance(value, np.generic) else value
+        for key, value in val_metrics.items()
+    }
     torch.save({"state_dict": net.state_dict(), "hidden": net.hidden,
                 "obs_dim": OBS_DIM, "val_metrics": val_metrics}, path)
 
 
 def load_value(path, device="cpu"):
-    ckpt = torch.load(path, map_location=device, weights_only=False)
+    # Older local checkpoints stored a NumPy scalar in val_metrics.  Allow only
+    # the minimal NumPy constructors needed for that metadata while retaining
+    # PyTorch's weights-only unpickler (never fall back to arbitrary pickle).
+    safe_numpy = [
+        np._core.multiarray.scalar,
+        np.dtype,
+        type(np.dtype(np.float64)),
+    ]
+    with torch.serialization.safe_globals(safe_numpy):
+        ckpt = torch.load(path, map_location=device, weights_only=True)
     assert ckpt["obs_dim"] == OBS_DIM, f"value net obs_dim {ckpt['obs_dim']} != {OBS_DIM}"
     net = ValueNet(hidden=tuple(ckpt["hidden"]))
     net.load_state_dict(ckpt["state_dict"])
     net.to(device).eval()
-    return net, ckpt
+    metadata = {key: value for key, value in ckpt.items() if key != "state_dict"}
+    if isinstance(metadata.get("val_metrics"), dict):
+        metadata["val_metrics"] = {
+            key: value.item() if isinstance(value, np.generic) else value
+            for key, value in metadata["val_metrics"].items()
+        }
+    return net, metadata
 
 
 class ValueGuide:

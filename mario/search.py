@@ -4,7 +4,7 @@ that beats a level.
 In-process only: snapshots (NativeStateSnapshot) are not picklable, so one search runs
 on a single MarioSim. Parallelism happens ACROSS searches (levels/states), not within.
 
-Core loop (DESIGN.md §6): from each beam node, try all 7 action-chunks via snapshot
+Core loop (DESIGN.md §6): from each beam node, try every configured action chunk via snapshot
 restore; score the resulting state with the death-aware reward; drop dead nodes; dedup
 by spatial bucket; keep the top-k. Return as soon as a node reaches the flag.
 """
@@ -13,9 +13,32 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
-from mario.env import MarioSim, N_ACTIONS
+from mario.actions import SMB1_N_ACTIONS
 from mario.reward import DEFAULT, RewardWeights, is_death, is_success, state_score
+
+
+# The vocabulary is emulator-free; the emulator class itself remains lazy so
+# adapter-backed GBA/GB search imports do not require NES packages.
+N_ACTIONS = SMB1_N_ACTIONS
+MarioSim = None
+
+
+def _new_nes_sim(*args, **kwargs):
+    """Construct MarioSim, loading the optional NES stack on first use."""
+    global MarioSim, N_ACTIONS
+    if MarioSim is None:
+        try:
+            from mario.env import MarioSim as _MarioSim, N_ACTIONS as _N_ACTIONS
+        except ImportError as exc:  # pragma: no cover - depends on optional install
+            raise RuntimeError(
+                "NES search requires the NES emulator stack. Install this project "
+                "with `uv pip install -e '.[nes]'` in a dedicated NES environment."
+            ) from exc
+        MarioSim = _MarioSim
+        N_ACTIONS = _N_ACTIONS
+    return MarioSim(*args, **kwargs)
 
 
 @dataclass
@@ -583,7 +606,9 @@ def beam_search(world: int = 1, stage: int = 1, *, beam_width: int = 40,
     beam keep the solvable lineage and discard doomed-but-high-progress nodes at the frontier
     edge — a shallow/narrow search then behaves like a deeper/wider one. value_weight is in
     px-equivalent units (V in [0,1]); 600 ≈ "a doomed node is worth ~600px less progress"."""
-    sim = MarioSim(world, stage)
+    if policy_topk is not None and policy_topk <= 0:
+        raise ValueError("policy_topk must be positive")
+    sim = _new_nes_sim(world, stage)
     sim.reset(seed=seed)
     if start_prefix:
         for a in start_prefix:
@@ -626,6 +651,9 @@ def beam_search(world: int = 1, stage: int = 1, *, beam_width: int = 40,
                 else:                               # single-frame prior
                     sim.restore(node.snap)
                     lp = policy_prior.logp(sim.ram, node.info)
+                if len(lp) != N_ACTIONS:
+                    raise ValueError(
+                        f"policy_prior returned {len(lp)} actions, expected {N_ACTIONS}")
                 if policy_topk is not None and policy_topk < N_ACTIONS:
                     actions = sorted(range(N_ACTIONS), key=lambda a: lp[a], reverse=True)[:policy_topk]
             for a in actions:
@@ -721,6 +749,8 @@ def coverage_search(world: int = 1, stage: int = 1, *, beam_width: int = 48,
     teacher; keep stuck_cap generous since maze detours legitimately stall x for a while.
     """
     from mario.ram import mario_level_x, pipe_entering
+    if policy_topk is not None and policy_topk <= 0:
+        raise ValueError("policy_topk must be positive")
     AREA, APTR, Y_ADDR, FLOAT = 0x0760, 0x0750, 0x00CE, 0x001D
     PAGE_W = 1_000_000   # page-progress dominates x so ENTERING a pipe beats walking the surface
     if policy_prior is not None and actions is not None:
@@ -732,7 +762,8 @@ def coverage_search(world: int = 1, stage: int = 1, *, beam_width: int = 48,
     entity_obs_fn = None
     if pk:
         from mario.entity import entity_obs as entity_obs_fn
-    sim = MarioSim(world, stage, actions=actions) if actions is not None else MarioSim(world, stage)
+    sim = (_new_nes_sim(world, stage, actions=actions) if actions is not None
+           else _new_nes_sim(world, stage))
     sim.reset(seed=seed)
     prefix_actions = list(start_prefix) if start_prefix else []
     if prefix_actions:                 # replay a verified prefix (chain legs) before searching
@@ -949,7 +980,8 @@ def area_search(world: int, stage: int, *, start_prefix: list[int] | None = None
     from mario.ram import (mario_level_x, signed, AREA_NUMBER, AREA_POINTER,
                            pipe_entering, stage_key)
     Y_ADDR, XSPD = 0x00CE, 0x0057
-    sim = MarioSim(world, stage, actions=actions) if actions is not None else MarioSim(world, stage)
+    sim = (_new_nes_sim(world, stage, actions=actions) if actions is not None
+           else _new_nes_sim(world, stage))
     n_actions = len(actions) if actions is not None else N_ACTIONS
     sim.reset(seed=seed)
     if start_prefix:                       # prefix may use a coarser cf than exploration
@@ -1054,7 +1086,7 @@ def area_search(world: int, stage: int, *, start_prefix: list[int] | None = None
     return False, best_path, {}
 
 
-def search_from_state(sim: MarioSim, root_snap, *, world: int, stage: int,
+def search_from_state(sim: Any, root_snap, *, world: int, stage: int,
                       beam_width: int = 32, depth: int = 400, chunk_frames: int = 8,
                       weights: RewardWeights = DEFAULT, stuck_cap: int = 16,
                       waypoints=None, max_seconds: float = 90.0) -> list[int]:

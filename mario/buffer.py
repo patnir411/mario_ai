@@ -12,14 +12,14 @@ from pathlib import Path
 
 import numpy as np
 
-from mario.env import N_ACTIONS
+from mario.actions import SMB1_N_ACTIONS as N_ACTIONS
 from mario.observation import OBS_DIM
 
 # row fields and dtypes (the dataset contract)
 FIELDS = {
     "obs": np.float32,          # [N, OBS_DIM]
     "hard_action": np.int8,     # [N]   decisive action from a search trajectory (primary)
-    "soft_targets": np.float32, # [N, 7] auxiliary fatal-masked distribution
+    "soft_targets": np.float32, # [N, N_ACTIONS] auxiliary fatal-masked distribution
     "value": np.float32,        # [N]   teacher value (max_a q)
     "level_id": np.int16,       # [N]   world*10 + stage
     "source": np.int8,          # [N]   0 onpath, 1 recover, 2 predeath

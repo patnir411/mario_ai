@@ -17,7 +17,13 @@ Two independent fresh investigations (an 8-agent research swarm + an independent
 ## What was built (all from scratch, on-device M2 Pro)
 - **Emulator-as-forward-model search** over the deterministic, snapshot-able NES env (`mario/search.py`).
 - **`beam_search`** — death-aware, x-greedy beam. Beats linear levels.
-- **`coverage_search`** — the key new contribution: beam fused with Go-Explore coverage. Dedup key is the *cell* `(area $0760, x-tile, y-tile)`; each lineage earns a one-time novelty bonus; progress is *area-first* then x. Degrades to plain beam on linear levels; on mazes it keeps "same x, different room/height" states distinct. **Cracked 4-2's vertical/warp-zone maze**, where the plain beam emptied at x=3011.
+- **`coverage_search`** — the key new contribution: beam fused with
+  Go-Explore-style cell coverage (not the full Go-Explore algorithm). Dedup key
+  is the *cell* `(area $0760, x-tile, y-tile)`; each lineage earns a one-time
+  novelty bonus; progress is *area-first* then x. Degrades to plain beam on
+  linear levels; on mazes it keeps "same x, different room/height" states
+  distinct. **Cracked 4-2's vertical/warp-zone maze**, where the plain beam
+  emptied at x=3011.
 - **Distillation**: a learned `MarioPolicy` net (search→BC→warm-start DAgger) **beats 1-1 100%**; it plays 1-1 in the stitched video.
 - Self-verifying infra: per-level `data/solutions/*.json`, artifact-backed gates, self-healing `CLAUDE.md`, 38/38 tests green.
 

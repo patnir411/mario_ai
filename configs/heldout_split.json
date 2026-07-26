@@ -1,0 +1,8 @@
+{
+  "_comment": "Held-out-32 generalization split (the decisive data-diversity experiment). 26 cf8 levels that replay to the flag at seed 0. Each level TYPE (overworld / athletic / castle) appears in BOTH sets, so the held-out set measures zero-shot transfer to NEW instances of familiar types. cf1 TAS levels (2-2,7-2,7-4,8-4), the 6-3 false-positive, and unsolved 6-2 are excluded. INTEGRITY: holdout levels never enter training or the DAgger oracle.",
+  "train_levels": [
+    "1-1", "1-2", "1-3", "1-4", "2-1", "2-4", "3-1", "3-2", "3-4",
+    "4-1", "4-2", "4-4", "5-1", "5-2", "5-4", "6-1", "7-1", "7-3", "8-1", "8-3"
+  ],
+  "holdout_levels": ["2-3", "3-3", "4-3", "5-3", "6-4", "8-2"]
+}

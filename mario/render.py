@@ -12,7 +12,6 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
-from mario.env import MarioSim
 from mario.reward import is_death, is_success
 
 # colors
@@ -23,9 +22,21 @@ WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 
 
+def _new_nes_sim(*args, **kwargs):
+    """Construct the optional NES backend only for SMB1-specific rendering."""
+    try:
+        from mario.env import MarioSim
+    except ImportError as exc:  # pragma: no cover - depends on optional install
+        raise RuntimeError(
+            "SMB1 rendering requires the NES emulator stack. Install this project "
+            "with `uv pip install -e '.[nes]'` in a dedicated NES environment."
+        ) from exc
+    return MarioSim(*args, **kwargs)
+
+
 def replay(world: int, stage: int, seed: int, path: list[int], chunk_frames: int):
     """Replay a chunk path; return list of per-chunk records (frame, info, idx, flags)."""
-    sim = MarioSim(world, stage)
+    sim = _new_nes_sim(world, stage)
     info = sim.reset(seed=seed)
     frames = [{"frame": np.asarray(sim.last_obs).copy(), "info": dict(info),
                "idx": 0, "died": False, "flag": False}]
@@ -34,7 +45,7 @@ def replay(world: int, stage: int, seed: int, path: list[int], chunk_frames: int
         died = is_death(info, done)
         frames.append({"frame": np.asarray(sim.last_obs).copy(), "info": dict(info),
                        "idx": i, "died": died, "flag": is_success(info)})
-        if done:
+        if done or is_success(info):
             break
     sim.close()
     return frames
