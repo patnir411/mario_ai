@@ -131,7 +131,66 @@ def test_sma4_solution_files_wrap_as_verified_clear_options():
     assert Path(opt.source).exists()
     result = opt.execute(MetaState(world=1, node=(64, 32)))
     assert result.success
+    assert result.info["execution_mode"] == "symbolic_manifest_only"
+    assert result.info["physical_boundary_evidence"] is False
     assert "clear:1-1" in result.state.flags
     assert result.state.cleared & 1
     assert opt.cost.frames >= 1130
     assert opt.cost.nodes > 0
+
+
+def test_sma4_symbolic_manifest_mode_is_visible_in_search_result():
+    lib = load_default_sma4_clear_options()
+    start = MetaState(world=1, node=(64, 32))
+
+    result = search_options(
+        lib,
+        start,
+        lambda state: "clear:1-1" in state.flags,
+        max_tier=KnowledgeTier.TIER2_BLACK_BOX_OPTION,
+    )
+
+    assert result.found
+    assert result.path_evidence == [{
+        "option": "clear_sma4_1-1",
+        "execution_mode": "symbolic_manifest_only",
+        "physical_boundary_evidence": False,
+        "boundary_status": None,
+    }]
+
+
+class _UnsettledClearExecutor:
+    def __init__(self):
+        self.current = (b"root", {"mode": "level"})
+        self.settle = True
+
+    def restore(self, snap):
+        self.current = snap
+
+    def snapshot(self):
+        return self.current
+
+    def execute_clear_solution(self, _path, _snapshot):
+        self.current = (b"goal-but-not-map", {"mode": "level"})
+        return ({
+            "solved": True,
+            "settled_to_map": False,
+            "settle_required": True,
+            "final_info": {"mode": "level", "world": 1},
+        }, self.current)
+
+
+def test_physical_clear_fails_when_replay_does_not_settle_to_map():
+    option = load_default_sma4_clear_options().options["clear_sma4_1-1"]
+    start = MetaState(world=1, node=(64, 32))
+    executor = _UnsettledClearExecutor()
+    context = OptionContext(
+        executor=executor,
+        snapshots={start: executor.snapshot()},
+    )
+
+    result = option.execute(start, context)
+
+    assert not result.success
+    assert result.boundary["status"] == "failed"
+    assert result.info["executor_summary"]["settled_to_map"] is False

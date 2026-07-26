@@ -10,10 +10,19 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass, field
 from enum import IntEnum
+import hashlib
 import json
 import pickle
 from pathlib import Path
 from typing import Any, Callable, Iterable
+
+from mario.provenance import (
+    SnapshotDigest,
+    StateAliasError,
+    file_sha256,
+    snapshot_digest,
+    stable_encode,
+)
 
 
 class KnowledgeTier(IntEnum):
@@ -41,7 +50,9 @@ class MetaState:
         object.__setattr__(self, "world", int(self.world))
         object.__setattr__(self, "node", (int(self.node[0]), int(self.node[1])))
         object.__setattr__(self, "cleared", int(self.cleared))
-        object.__setattr__(self, "inventory", tuple(sorted(set(self.inventory))))
+        # Inventory is a multiset.  Collapsing duplicates aliases one whistle
+        # with two, which changes reachability of the two-whistle warp route.
+        object.__setattr__(self, "inventory", tuple(sorted(self.inventory)))
         object.__setattr__(self, "flags", tuple(sorted(set(self.flags))))
 
     def has_item(self, item: str) -> bool:
@@ -52,8 +63,11 @@ class MetaState:
                          self.inventory + (item,), self.flags)
 
     def without_item(self, item: str) -> "MetaState":
+        inventory = list(self.inventory)
+        if item in inventory:
+            inventory.remove(item)
         return MetaState(self.world, self.node, self.cleared,
-                         tuple(i for i in self.inventory if i != item), self.flags)
+                         tuple(inventory), self.flags)
 
     def with_world_node(self, world: int, node: tuple[int, int]) -> "MetaState":
         return MetaState(world, node, self.cleared, self.inventory, self.flags)
@@ -106,6 +120,32 @@ class OptionResult:
     exit_snapshot: Any = None
     info: dict = field(default_factory=dict)
     observed_effect: dict | None = None
+    entry_digest: dict | None = None
+    exit_digest: dict | None = None
+    exit_observable: dict | None = None
+    exit_adapter_context: dict | None = None
+    boundary: dict | None = None
+
+
+@dataclass
+class SnapshotRecord:
+    """A physical snapshot and the context/attestations needed to restore it."""
+
+    snapshot: Any
+    digest: SnapshotDigest
+    adapter_context: dict = field(default_factory=dict)
+    observable: dict = field(default_factory=dict)
+    producer: str | None = None
+    source: dict = field(default_factory=dict)
+
+    def to_json(self) -> dict:
+        return {
+            "digest": self.digest.to_json(),
+            "adapter_context": dict(self.adapter_context),
+            "observable": dict(self.observable),
+            "producer": self.producer,
+            "source": dict(self.source),
+        }
 
 
 @dataclass
@@ -114,20 +154,221 @@ class OptionContext:
 
     executor: Any = None
     snapshots: dict[MetaState, Any] = field(default_factory=dict)
+    snapshot_records: dict[MetaState, SnapshotRecord] = field(
+        default_factory=dict, init=False)
+    alias_collisions: list[dict] = field(default_factory=list, init=False)
+    restore_events: list[dict] = field(default_factory=list, init=False)
+    last_restore_event: dict | None = field(default=None, init=False)
+
+    def __post_init__(self) -> None:
+        for state, snap in self.snapshots.items():
+            self.snapshot_records[state] = self._record(
+                snap,
+                producer="initial_context",
+                source={"kind": "declared_root"},
+            )
+
+    def _adapter_context(self) -> dict:
+        if self.executor is not None and hasattr(self.executor, "snapshot_context"):
+            return dict(self.executor.snapshot_context())
+        return {}
+
+    def _backend(self) -> str | None:
+        if self.executor is None:
+            return None
+        if hasattr(self.executor, "snapshot_backend"):
+            return str(self.executor.snapshot_backend())
+        return type(self.executor).__name__
+
+    def _rom_sha1(self) -> str | None:
+        if self.executor is None:
+            return None
+        if hasattr(self.executor, "rom_sha1"):
+            value = self.executor.rom_sha1()
+            return str(value) if value else None
+        core = getattr(self.executor, "core", None)
+        value = getattr(core, "rom_sha1", None)
+        return str(value) if value else None
+
+    def observable(self) -> dict:
+        if self.executor is not None and hasattr(
+                self.executor, "snapshot_observable"):
+            return dict(self.executor.snapshot_observable())
+        return {}
+
+    @staticmethod
+    def _observables_match(expected: dict, actual: dict) -> bool:
+        if not expected:
+            return False
+        # Stable-Retro's display buffer is a host-side cache and is not restored
+        # by mGBA savestates.  Exact emulated memory is the restore invariant;
+        # screen hashes remain diagnostic evidence in each record.
+        if "ram_blocks" in expected and "ram_blocks" in actual:
+            return expected["ram_blocks"] == actual["ram_blocks"]
+        return expected == actual
+
+    def digest(self, snapshot: Any, *,
+               adapter_context: dict | None = None) -> SnapshotDigest:
+        return snapshot_digest(
+            snapshot,
+            adapter_context=(self._adapter_context()
+                             if adapter_context is None else adapter_context),
+            backend=self._backend(),
+            rom_sha1=self._rom_sha1(),
+        )
+
+    def _record(self, snapshot: Any, *, producer: str | None = None,
+                source: dict | None = None,
+                adapter_context: dict | None = None,
+                observable: dict | None = None) -> SnapshotRecord:
+        context = (self._adapter_context()
+                   if adapter_context is None else dict(adapter_context))
+        return SnapshotRecord(
+            snapshot=snapshot,
+            digest=self.digest(snapshot, adapter_context=context),
+            adapter_context=context,
+            observable=(
+                self.observable() if observable is None else dict(observable)
+            ),
+            producer=producer,
+            source=dict(source or {}),
+        )
+
+    def _equivalence_signature(
+            self, snapshot: Any,
+            adapter_context: dict | None = None) -> dict | None:
+        if self.executor is not None and hasattr(
+                self.executor, "snapshot_equivalence_signature"):
+            current_context = self._adapter_context()
+            try:
+                if (
+                    adapter_context is not None
+                    and hasattr(self.executor, "apply_snapshot_context")
+                ):
+                    self.executor.apply_snapshot_context(adapter_context)
+                return dict(
+                    self.executor.snapshot_equivalence_signature(snapshot)
+                )
+            finally:
+                if hasattr(self.executor, "apply_snapshot_context"):
+                    self.executor.apply_snapshot_context(current_context)
+        return None
 
     def restore(self, state: MetaState) -> bool:
         snap = self.snapshots.get(state)
-        if self.executor is None or snap is None:
+        record = self.snapshot_records.get(state)
+        if self.executor is None or snap is None or record is None:
+            event = {
+                "kind": "parent_restore",
+                "status": "missing",
+                "state": state.to_json(),
+            }
+            self.restore_events.append(event)
+            self.last_restore_event = event
             return False
+        if hasattr(self.executor, "apply_snapshot_context"):
+            self.executor.apply_snapshot_context(record.adapter_context)
         self.executor.restore(snap)
+        actual = self._record(
+            self.executor.snapshot()
+            if hasattr(self.executor, "snapshot") else snap,
+            producer=record.producer,
+            source=record.source,
+        )
+        raw_match = (
+            actual.digest.full_sha256 == record.digest.full_sha256
+        )
+        wrapper_match = (
+            actual.digest.metadata_sha256 == record.digest.metadata_sha256
+            and actual.digest.adapter_context_sha256
+            == record.digest.adapter_context_sha256
+        )
+        observable_match = (
+            self._observables_match(record.observable, actual.observable)
+        )
+        expected_suffix = None
+        actual_suffix = None
+        suffix_match = False
+        if not raw_match and wrapper_match and observable_match:
+            expected_suffix = self._equivalence_signature(
+                record.snapshot, record.adapter_context)
+            actual_suffix = self._equivalence_signature(
+                actual.snapshot, record.adapter_context)
+            suffix_match = (
+                expected_suffix is not None
+                and expected_suffix == actual_suffix
+            )
+        if raw_match and record.digest.exact and actual.digest.exact:
+            status = "restored_exact_bytes"
+        elif raw_match:
+            status = "restored_deterministic_digest"
+        elif wrapper_match and observable_match and suffix_match:
+            status = "restored_suffix_attested"
+        else:
+            status = "restore_mismatch"
+        event = {
+            "kind": "parent_restore",
+            "status": status,
+            "state": state.to_json(),
+            "expected": record.digest.to_json(),
+            "actual": actual.digest.to_json(),
+            "producer": record.producer,
+            "source": dict(record.source),
+            "raw_snapshot_match": raw_match,
+            "wrapper_metadata_match": wrapper_match,
+            "observable_match": observable_match,
+            "fixed_suffix_match": suffix_match,
+            "expected_fixed_suffix": expected_suffix,
+            "actual_fixed_suffix": actual_suffix,
+            "speculative_noop_frames": (
+                0 if expected_suffix is None
+                else expected_suffix["frames"] + actual_suffix["frames"]
+            ),
+            "expected_observable": dict(record.observable),
+            "actual_observable": dict(actual.observable),
+        }
+        self.restore_events.append(event)
+        self.last_restore_event = event
+        if status == "restore_mismatch":
+            raise RuntimeError(
+                "executor restore did not reproduce the recorded physical state"
+            )
         return True
 
-    def remember(self, state: MetaState, snapshot: Any) -> None:
-        # First-wins: later paths to the same symbolic state must not clobber a
-        # previously recorded emulator snapshot (uniform-cost can otherwise
-        # overwrite a whistle-usable post-state with a locked fortress exit).
-        if snapshot is not None and state not in self.snapshots:
+    def remember(self, state: MetaState, snapshot: Any, *,
+                 producer: str | None = None,
+                 source: dict | None = None,
+                 observable: dict | None = None,
+                 adapter_context: dict | None = None,
+                 replace_equivalent: bool = False) -> str:
+        """Commit a successful transition snapshot or fail on an abstraction alias."""
+        if snapshot is None:
+            return "no_snapshot"
+        candidate = self._record(
+            snapshot,
+            producer=producer,
+            source=source or {"kind": "option_exit"},
+            observable=observable,
+            adapter_context=adapter_context,
+        )
+        retained = self.snapshot_records.get(state)
+        if retained is None:
             self.snapshots[state] = snapshot
+            self.snapshot_records[state] = candidate
+            return "stored"
+        if retained.digest.full_sha256 == candidate.digest.full_sha256:
+            if replace_equivalent:
+                self.snapshots[state] = snapshot
+                self.snapshot_records[state] = candidate
+                return "replaced_same"
+            return "same"
+        collision = {
+            "state": state.to_json(),
+            "retained": retained.to_json(),
+            "rejected": candidate.to_json(),
+        }
+        self.alias_collisions.append(collision)
+        raise StateAliasError(collision)
 
 
 Precondition = Callable[[MetaState], bool]
@@ -135,12 +376,310 @@ Runner = Callable[[MetaState, OptionContext], OptionResult]
 Verifier = Callable[[Any], bool]
 
 
-class SMA4SolutionExecutor:
+class _SMA4ProvenanceMixin:
+    """Shared exact-state context and transition ledger for GBA executors."""
+
+    core: Any
+
+    def _init_provenance(self) -> None:
+        self._active_option: str | None = None
+        self._trace_events: list[dict] = []
+
+    def snapshot_backend(self) -> str:
+        return "stable-retro/mgba"
+
+    def rom_sha1(self) -> str | None:
+        value = getattr(self.core, "rom_sha1", None)
+        return str(value) if value else None
+
+    def snapshot_context(self) -> dict:
+        return {
+            "game_id": getattr(self.core, "game_id", None),
+            "level_id": getattr(self.core, "level_id", None),
+            "world": getattr(self.core, "world", None),
+            "stage": getattr(self.core, "stage", None),
+            "start_lives": getattr(self.core, "_start_lives", None),
+            "action_names": list(getattr(self.core, "action_names", [])),
+        }
+
+    def snapshot_observable(self) -> dict:
+        """Exact emulated-memory hashes plus a diagnostic host display hash."""
+        blocks = {}
+        memory = getattr(getattr(self.core, "env", None), "data", None)
+        memory = getattr(memory, "memory", None)
+        for base, block in sorted(getattr(memory, "blocks", {}).items()):
+            raw = bytes(block)
+            blocks[f"0x{int(base):08X}"] = {
+                "bytes": len(raw),
+                "sha256": hashlib.sha256(raw).hexdigest(),
+            }
+        screen = self.core.last_obs
+        screen_raw = (
+            screen.tobytes(order="C")
+            if hasattr(screen, "tobytes")
+            else bytes(screen)
+        )
+        return {
+            "ram_blocks": blocks,
+            "screen_sha256": hashlib.sha256(screen_raw).hexdigest(),
+            "screen_shape": list(getattr(screen, "shape", ())),
+        }
+
+    def snapshot_equivalence_signature(self, snapshot: Any, *,
+                                       frames: int = 4) -> dict:
+        """Replay a fixed NOOP suffix as a falsifier for hidden-state aliases.
+
+        Savestate bytes from mGBA are not canonical after load.  Matching all
+        emulated memory at the boundary is necessary but cannot see CPU/register
+        state, so this additionally compares a deterministic forward suffix.
+        It is an attestation, not a proof of equivalence for every action suffix.
+        """
+        current = self.snapshot()
+        try:
+            self.core.restore(snapshot)
+            samples = []
+            for frame in range(1, int(frames) + 1):
+                _obs, info, done = self.core._step_buttons(())
+                observable = self.snapshot_observable()
+                samples.append({
+                    "frame": frame,
+                    "ram_blocks": observable["ram_blocks"],
+                    "info": info,
+                    "done": bool(done),
+                })
+            signature = hashlib.sha256(stable_encode(samples)).hexdigest()
+        finally:
+            self.core.restore(current)
+        return {
+            "kind": "fixed_noop_suffix",
+            "frames": int(frames),
+            "sha256": signature,
+        }
+
+    def apply_snapshot_context(self, context: dict) -> None:
+        for attr, key in (
+            ("level_id", "level_id"),
+            ("world", "world"),
+            ("stage", "stage"),
+            ("_start_lives", "start_lives"),
+        ):
+            if key in context and context[key] is not None:
+                setattr(self.core, attr, context[key])
+
+    def _set_adapter_context(self, *, reason: str,
+                             knowledge_tier: KnowledgeTier,
+                             **changes: Any) -> None:
+        before = self.snapshot_context()
+        for attr, value in changes.items():
+            setattr(self.core, attr, value)
+        self._trace_events.append({
+            "kind": "adapter_context_write",
+            "reason": reason,
+            "knowledge_tier": int(knowledge_tier),
+            "before": before,
+            "after": self.snapshot_context(),
+            "changes": dict(changes),
+        })
+
+    def _snapshot_digest_json(self, snapshot: Any) -> dict:
+        return snapshot_digest(
+            snapshot,
+            adapter_context=self.snapshot_context(),
+            backend=self.snapshot_backend(),
+            rom_sha1=self.rom_sha1(),
+        ).to_json()
+
+    def _record_solution_artifact(
+        self,
+        path: str | Path,
+        solution: dict,
+        *,
+        action_field: str,
+        knowledge_tier: KnowledgeTier,
+    ) -> None:
+        path = Path(path)
+        action_payload = {
+            "action_field": action_field,
+            "actions": solution.get(action_field) or [],
+            "action_names": solution.get("action_names") or [],
+            "chunk_frames": int(solution.get("chunk_frames", 1)),
+        }
+        self._trace_events.append({
+            "kind": "solution_artifact",
+            "knowledge_tier": int(knowledge_tier),
+            "path": str(path),
+            "file_sha256": file_sha256(path),
+            "payload_kind": "declared_manifest_actions",
+            "declared_action_payload_sha256": hashlib.sha256(
+                stable_encode(action_payload)
+            ).hexdigest(),
+            "n_actions": len(action_payload["actions"]),
+            "chunk_frames": action_payload["chunk_frames"],
+        })
+
+    def begin_option_trace(self, option_id: str, entry_digest: dict | None) -> None:
+        self._active_option = str(option_id)
+        self._trace_events = []
+        self._trace_entry_digest = entry_digest
+
+    def end_option_trace(self) -> dict:
+        out = {
+            "option": self._active_option,
+            "entry_digest": self._trace_entry_digest,
+            "events": list(self._trace_events),
+            "ram_writes": [
+                event for event in self._trace_events
+                if event.get("kind") == "ram_write"
+            ],
+            "snapshot_restores": [
+                event for event in self._trace_events
+                if event.get("kind") == "snapshot_restore"
+            ],
+        }
+        self._active_option = None
+        self._trace_events = []
+        self._trace_entry_digest = None
+        return out
+
+    def _restore_external_snapshot(
+        self,
+        snapshot: Any,
+        *,
+        source_path: str | Path,
+        reason: str,
+        knowledge_tier: KnowledgeTier,
+    ) -> None:
+        before = self._snapshot_digest_json(self.snapshot())
+        source_path = Path(source_path)
+        expected = self._snapshot_digest_json(snapshot)
+        self.core.restore(snapshot)
+        actual_snapshot = self.snapshot()
+        actual = self._snapshot_digest_json(actual_snapshot)
+        actual_observable = self.snapshot_observable()
+        # mGBA savestate serialization is not byte-canonical after load.  Load
+        # the same declared root twice and require emulated memory plus a fixed
+        # forward suffix to agree; retain all three raw hashes as provenance.
+        self.core.restore(snapshot)
+        repeated_snapshot = self.snapshot()
+        repeated = self._snapshot_digest_json(repeated_snapshot)
+        repeated_observable = self.snapshot_observable()
+        source_suffix = self.snapshot_equivalence_signature(snapshot)
+        actual_suffix = self.snapshot_equivalence_signature(actual_snapshot)
+        repeated_suffix = self.snapshot_equivalence_signature(repeated_snapshot)
+        event = {
+            "kind": "snapshot_restore",
+            "restore_kind": "external_root",
+            "reason": reason,
+            "knowledge_tier": int(knowledge_tier),
+            "source_path": str(source_path),
+            "source_file_sha256": file_sha256(source_path),
+            "before": before,
+            "expected": expected,
+            "actual": actual,
+            "repeated_load": repeated,
+            "emulator_exact_match": (
+                expected["emulator_sha256"] == actual["emulator_sha256"]
+            ),
+            "full_wrapper_match": (
+                expected["full_sha256"] == actual["full_sha256"]
+            ),
+            "wrapper_metadata_redecoded": (
+                expected["metadata_sha256"] != actual["metadata_sha256"]
+            ),
+            "load_observable": actual_observable,
+            "repeated_load_observable": repeated_observable,
+            "repeated_load_observable_match": (
+                OptionContext._observables_match(
+                    actual_observable, repeated_observable)
+            ),
+            "source_fixed_suffix": source_suffix,
+            "actual_fixed_suffix": actual_suffix,
+            "repeated_fixed_suffix": repeated_suffix,
+            "fixed_suffix_match": (
+                source_suffix == actual_suffix == repeated_suffix
+            ),
+            "restore_attempts": 2,
+            "speculative_noop_frames": (
+                source_suffix["frames"]
+                + actual_suffix["frames"]
+                + repeated_suffix["frames"]
+            ),
+        }
+        self._trace_events.append(event)
+        if not (
+            event["repeated_load_observable_match"]
+            and event["fixed_suffix_match"]
+        ):
+            raise RuntimeError(
+                f"external snapshot load is not observable-deterministic for "
+                f"{source_path}"
+            )
+
+    def _restore_runtime_snapshot(self, snapshot: Any, *, reason: str,
+                                  frame: int | None = None,
+                                  expected_observable: dict | None = None) -> None:
+        before = self._snapshot_digest_json(self.snapshot())
+        expected = self._snapshot_digest_json(snapshot)
+        self.core.restore(snapshot)
+        actual_snapshot = self.snapshot()
+        actual = self._snapshot_digest_json(actual_snapshot)
+        actual_observable = self.snapshot_observable()
+        raw_match = expected["full_sha256"] == actual["full_sha256"]
+        wrapper_match = (
+            expected["metadata_sha256"] == actual["metadata_sha256"]
+            and expected["adapter_context_sha256"]
+            == actual["adapter_context_sha256"]
+        )
+        observable_match = (
+            expected_observable is not None
+            and OptionContext._observables_match(
+                expected_observable, actual_observable)
+        )
+        expected_suffix = None
+        actual_suffix = None
+        suffix_match = False
+        if not raw_match and wrapper_match and observable_match:
+            expected_suffix = self.snapshot_equivalence_signature(snapshot)
+            actual_suffix = self.snapshot_equivalence_signature(actual_snapshot)
+            suffix_match = expected_suffix == actual_suffix
+        event = {
+            "kind": "snapshot_restore",
+            "restore_kind": "runtime_rollback",
+            "reason": reason,
+            "frame": frame,
+            "before": before,
+            "expected": expected,
+            "actual": actual,
+            "raw_snapshot_match": raw_match,
+            "wrapper_metadata_match": wrapper_match,
+            "observable_match": observable_match,
+            "expected_observable": expected_observable,
+            "actual_observable": actual_observable,
+            "expected_fixed_suffix": expected_suffix,
+            "actual_fixed_suffix": actual_suffix,
+            "fixed_suffix_match": suffix_match,
+            "speculative_noop_frames": (
+                0 if expected_suffix is None
+                else expected_suffix["frames"] + actual_suffix["frames"]
+            ),
+            "restore_attested": (
+                raw_match or (
+                    wrapper_match and observable_match and suffix_match
+                )
+            ),
+        }
+        self._trace_events.append(event)
+        if not event["restore_attested"]:
+            raise RuntimeError(f"runtime snapshot restore mismatch: {reason}")
+
+
+class SMA4SolutionExecutor(_SMA4ProvenanceMixin):
     """Adapter from option execution to the existing cached SMA4 replay path."""
 
     def __init__(self, core: Any, *, settle: bool = True):
         self.core = core
         self.settle = bool(settle)
+        self._init_provenance()
 
     def restore(self, snapshot: Any) -> None:
         self.core.restore(snapshot)
@@ -154,19 +693,52 @@ class SMA4SolutionExecutor:
 
         solution_path = Path(solution_path)
         solution = json.loads(solution_path.read_text())
-        entry_snap = _load_snapshot(entry_snapshot or solution.get("snapshot"))
-        summary = replay_cached_solution(self.core, solution, entry_snap=entry_snap,
+        level_id = str(solution.get("level_id") or solution_path.stem)
+        try:
+            world_text, stage_text = level_id.split("-", 1)
+            world = int(world_text)
+            stage = int(stage_text)
+        except ValueError as exc:
+            raise ValueError(
+                f"clear solution has non-numeric level_id {level_id!r}"
+            ) from exc
+        self._set_adapter_context(
+            reason="label_cached_clear_level_root",
+            knowledge_tier=KnowledgeTier.TIER2_BLACK_BOX_OPTION,
+            level_id=level_id,
+            world=world,
+            stage=stage,
+        )
+        self._record_solution_artifact(
+            solution_path,
+            solution,
+            action_field="path",
+            knowledge_tier=KnowledgeTier.TIER2_BLACK_BOX_OPTION,
+        )
+        entry_path = Path(entry_snapshot or solution.get("snapshot"))
+        entry_snap = _load_snapshot(entry_path)
+        self._restore_external_snapshot(
+            entry_snap,
+            source_path=entry_path,
+            reason="clear_level_cached_entry",
+            knowledge_tier=KnowledgeTier.TIER2_BLACK_BOX_OPTION,
+        )
+        summary = replay_cached_solution(self.core, solution, entry_snap=None,
                                          settle=self.settle)
+        summary["solution_file_sha256"] = file_sha256(solution_path)
+        summary["entry_snapshot_file_sha256"] = file_sha256(entry_path)
+        summary["settle_required"] = self.settle
         return summary, self.core.snapshot()
 
 
-class SMA4WhistleExecutor:
+class SMA4WhistleExecutor(_SMA4ProvenanceMixin):
     """Executor for the SMA4 two-whistle warp route.
 
-    Tier-1 path hand-grants whistles.  Tier-2 path replays the verified
-    `acquire_whistle_1_3` solution (white-block → Toad chest → map exit).
-    Whistle spend options remain effect-opaque: the meta-search must execute
-    them against the emulator and read the resulting RAM state.
+    Tier-1 path hand-grants whistles.  Tier-2 paths replay the verified
+    `acquire_whistle_1_3` and `acquire_whistle_fortress` solutions from their
+    declared cached roots.  Whistle spend options remain effect-opaque: the
+    meta-search must execute them against the emulator and read the resulting
+    RAM state.
     """
 
     INVENTORY_START = 0x03002C2E
@@ -183,6 +755,7 @@ class SMA4WhistleExecutor:
 
     def __init__(self, core: Any):
         self.core = core
+        self._init_provenance()
 
     def restore(self, snapshot: Any) -> None:
         self.core.restore(snapshot)
@@ -193,8 +766,23 @@ class SMA4WhistleExecutor:
     def _read_u8(self, addr: int) -> int:
         return int(self.core._read_u8(addr))
 
-    def _write_u8(self, addr: int, value: int) -> None:
+    def _write_u8(self, addr: int, value: int, *, reason: str,
+                  knowledge_tier: KnowledgeTier,
+                  frame: int | None = None) -> None:
+        before = self._read_u8(addr)
         self.core.env.data.memory.assign(addr, "|u1", int(value) & 0xFF)
+        after = self._read_u8(addr)
+        self._trace_events.append({
+            "kind": "ram_write",
+            "address": f"0x{int(addr):08X}",
+            "before": before,
+            "requested": int(value) & 0xFF,
+            "after": after,
+            "changed": before != after,
+            "reason": reason,
+            "knowledge_tier": int(knowledge_tier),
+            "frame": frame,
+        })
 
     def _step(self, buttons: tuple[str, ...], frames: int) -> int:
         for _ in range(frames):
@@ -234,6 +822,7 @@ class SMA4WhistleExecutor:
                 self._read_u8(self.core.MAP_CURSOR_Y),
             ],
             "mode": self.core.last_info.get("mode"),
+            "panel_slots_raw": int(self.core.last_info.get("cleared", 0)),
             "time": int(self.core.last_info.get("time", 0)),
             "inventory_first4": self.inventory()[:4],
             "item_menu_open": self._read_u8(self.ITEM_MENU_OPEN),
@@ -241,11 +830,60 @@ class SMA4WhistleExecutor:
             "map_dest_or_region": self._read_u8(self.MAP_DEST_OR_REGION),
         }
 
+    def decode_meta_state(self) -> dict:
+        raw_world = self._read_u8(self.core.WORLD)
+        inventory = self.inventory()
+        return {
+            "world": 9 if raw_world == self.WARP_ZONE_WORLD_RAW
+            else raw_world + 1,
+            "node": [
+                self._read_u8(self.core.MAP_CURSOR_X),
+                self._read_u8(self.core.MAP_CURSOR_Y),
+            ],
+            "panel_slots_raw": int(self.core.last_info.get("cleared", 0)),
+            "inventory": sorted(
+                "whistle" for value in inventory if value == self.WARP_WHISTLE
+            ),
+            "mode": self.core.last_info.get("mode"),
+            "raw_world": raw_world,
+        }
+
+    @staticmethod
+    def compare_meta_state(state: MetaState, decoded: dict) -> dict:
+        checks = {
+            "world": state.world == int(decoded["world"]),
+            "node": list(state.node) == list(decoded["node"]),
+            "inventory": list(state.inventory) == list(decoded["inventory"]),
+            "mode": decoded.get("mode") == "overworld",
+        }
+        return {
+            "matches": all(checks.values()),
+            "checks": checks,
+            "declared": state.to_json(),
+            "decoded": decoded,
+            "note": (
+                "flags and symbolic cleared bits are not decoded from RAM; "
+                "0x03002C52 is exposed only as opaque panel_slots_raw"
+            ),
+        }
+
     def grant_whistles(self, count: int = 2) -> dict:
         for i in range(self.INVENTORY_SLOTS):
-            self._write_u8(self.INVENTORY_START + i, 0)
+            self._write_u8(
+                self.INVENTORY_START + i,
+                0,
+                reason="hand_grant_clear_inventory",
+                knowledge_tier=KnowledgeTier.TIER1_ITEM_GIVEN,
+                frame=0,
+            )
         for i in range(int(count)):
-            self._write_u8(self.INVENTORY_START + i, self.WARP_WHISTLE)
+            self._write_u8(
+                self.INVENTORY_START + i,
+                self.WARP_WHISTLE,
+                reason="hand_grant_warp_whistle",
+                knowledge_tier=KnowledgeTier.TIER1_ITEM_GIVEN,
+                frame=0,
+            )
         self.core._last_info = self.core._normalize_info(self.core.last_info)
         return {
             "success": True,
@@ -277,6 +915,12 @@ class SMA4WhistleExecutor:
         """
         sol_path = Path(solution_path or self.ACQUIRE_WHISTLE_1_3)
         sol = json.loads(sol_path.read_text())
+        self._record_solution_artifact(
+            sol_path,
+            sol,
+            action_field="path_buttons",
+            knowledge_tier=KnowledgeTier.TIER2_BLACK_BOX_OPTION,
+        )
         entry = Path(entry_snapshot or sol.get("entry_snapshot")
                      or "runs/sma4_cache/1-3_pwing_entry.pkl")
         buttons = [tuple(b) for b in sol["path_buttons"]]
@@ -284,13 +928,30 @@ class SMA4WhistleExecutor:
         prior_count = sum(1 for v in prior if v == self.WARP_WHISTLE)
         frames = 0
         samples = [self.sample("before_acquire_whistle_1_3", frames)]
-        self.core.level_id = "1-3"
-        self.core.restore(self._load_snapshot_file(entry))
+        self._set_adapter_context(
+            reason="label_cached_1_3_root",
+            knowledge_tier=KnowledgeTier.TIER2_BLACK_BOX_OPTION,
+            level_id="1-3",
+            world=1,
+            stage=3,
+        )
+        self._restore_external_snapshot(
+            self._load_snapshot_file(entry),
+            source_path=entry,
+            reason="acquire_whistle_1_3_pwing_entry",
+            knowledge_tier=KnowledgeTier.TIER2_BLACK_BOX_OPTION,
+        )
         # Preserve any already-held whistles across the P-Wing entry restore
         # (e.g. fortress acquire ran first; chest must be able to stack).
         for i, val in enumerate(prior[: self.INVENTORY_SLOTS]):
             if int(val):
-                self._write_u8(self.INVENTORY_START + i, int(val))
+                self._write_u8(
+                    self.INVENTORY_START + i,
+                    int(val),
+                    reason="merge_predecessor_inventory_into_1_3_root",
+                    knowledge_tier=KnowledgeTier.TIER2_BLACK_BOX_OPTION,
+                    frame=frames,
+                )
         samples.append(self.sample("restored_pwing_1_3_entry", frames))
         for bt in buttons:
             self.core._step_buttons(bt)
@@ -336,13 +997,20 @@ class SMA4WhistleExecutor:
         Restores the leaf fortress-spawn entry (not a mid-level door snap).  If
         the live inventory already holds a whistle (e.g. after
         ``acquire_whistle_1_3``), those slots are copied onto the restored entry
-        so the chest can stack a second ``0x0C``.  Leaf/pspeed are re-held during
-        the route.  After the chest, stop the scripted path, ``UP`` out of the
-        treasure room, idle, then hold ``B`` so the map accepts L-menu.  Success
-        = overworld with at least one more whistle than before and L-menu openable.
+        so the chest can stack a second ``0x0C``.  The root seeds P-speed; leaf
+        power is re-held after damage.  After the chest, stop the scripted path,
+        ``UP`` out of the treasure room, idle, then hold ``B`` so the map accepts
+        L-menu.  Success = overworld with at least one more whistle than before
+        and L-menu openable.
         """
         sol_path = Path(solution_path or self.ACQUIRE_WHISTLE_FORTRESS)
         sol = json.loads(sol_path.read_text())
+        self._record_solution_artifact(
+            sol_path,
+            sol,
+            action_field="path_buttons",
+            knowledge_tier=KnowledgeTier.TIER2_BLACK_BOX_OPTION,
+        )
         entry = Path(entry_snapshot or sol.get("entry_snapshot")
                      or "runs/sma4_cache/1-fortress_pwing_leaf_entry.pkl")
         buttons = [tuple(b) for b in sol["path_buttons"]]
@@ -351,19 +1019,42 @@ class SMA4WhistleExecutor:
         target_count = max(1, prior_count + 1)
         frames = 0
         samples = [self.sample("before_acquire_whistle_fortress", frames)]
-        self.core.level_id = "1-fortress"
-        self.core.restore(self._load_snapshot_file(entry))
+        self._set_adapter_context(
+            reason="label_cached_fortress_root",
+            knowledge_tier=KnowledgeTier.TIER2_BLACK_BOX_OPTION,
+            level_id="1-fortress",
+            world=1,
+            stage=0,
+        )
+        self._restore_external_snapshot(
+            self._load_snapshot_file(entry),
+            source_path=entry,
+            reason="acquire_whistle_fortress_pwing_leaf_entry",
+            knowledge_tier=KnowledgeTier.TIER2_BLACK_BOX_OPTION,
+        )
         # Preserve any already-held whistles across the spawn-entry restore.
         for i, val in enumerate(prior[: self.INVENTORY_SLOTS]):
             if int(val):
-                self._write_u8(self.INVENTORY_START + i, int(val))
+                self._write_u8(
+                    self.INVENTORY_START + i,
+                    int(val),
+                    reason="merge_predecessor_inventory_into_fortress_root",
+                    knowledge_tier=KnowledgeTier.TIER2_BLACK_BOX_OPTION,
+                    frame=frames,
+                )
         # Entry snap already holds leaf/pspeed — do not extra-settle (desyncs path).
         samples.append(self.sample("restored_fortress_pwing_entry", frames))
         for bt in buttons:
             self.core._step_buttons(bt)
             frames += 1
             if int(self.core.last_info.get("powerup") or 0) < 3:
-                self._write_u8(self.core.POWERUP, 3)
+                self._write_u8(
+                    self.core.POWERUP,
+                    3,
+                    reason="fortress_leaf_rehold_after_damage",
+                    knowledge_tier=KnowledgeTier.TIER2_BLACK_BOX_OPTION,
+                    frame=frames,
+                )
             # Truncate at chest — recorded exit settle is re-applied below.
             if sum(1 for v in self.inventory() if v == self.WARP_WHISTLE) >= target_count:
                 break
@@ -393,13 +1084,19 @@ class SMA4WhistleExecutor:
         menu_ok = False
         if self.core.last_info.get("mode") == "overworld":
             snap = self.snapshot()
+            snap_observable = self.snapshot_observable()
             for _ in range(20):
                 self.core._step_buttons(("L",))
                 frames += 1
                 if self._read_u8(self.ITEM_MENU_OPEN):
                     menu_ok = True
                     break
-            self.restore(snap)
+            self._restore_runtime_snapshot(
+                snap,
+                reason="fortress_menu_probe_rollback",
+                frame=frames,
+                expected_observable=snap_observable,
+            )
             frames += self._step((), 2)
         success = (
             self.core.last_info.get("mode") == "overworld"
@@ -410,7 +1107,7 @@ class SMA4WhistleExecutor:
             f for f in (sol.get("injected_facts") or [
                 "pwing_fortress_entry_snapshot",
                 "leaf_rehold_during_route",
-                "pspeed_poke_during_fly",
+                "pspeed_seeded_in_entry_snapshot",
             ])
             if f not in (
                 "fortress_inventory_rehosted_to_pre_door_map",
@@ -432,10 +1129,23 @@ class SMA4WhistleExecutor:
             "injected_facts": injected,
         }
 
-    def _sync_map_cursor(self, x: int, y: int) -> None:
+    def _sync_map_cursor(self, x: int, y: int, *,
+                         reason: str, frame: int | None = None) -> None:
         """Write map cursor when AcquireWhistle leaves MAP_CURSOR_* stale."""
-        self._write_u8(self.core.MAP_CURSOR_X, int(x) & 0xFF)
-        self._write_u8(self.core.MAP_CURSOR_Y, int(y) & 0xFF)
+        self._write_u8(
+            self.core.MAP_CURSOR_X,
+            int(x) & 0xFF,
+            reason=f"{reason}:x",
+            knowledge_tier=KnowledgeTier.TIER3_SUBGOAL_HINT,
+            frame=frame,
+        )
+        self._write_u8(
+            self.core.MAP_CURSOR_Y,
+            int(y) & 0xFF,
+            reason=f"{reason}:y",
+            knowledge_tier=KnowledgeTier.TIER3_SUBGOAL_HINT,
+            frame=frame,
+        )
         self.core._last_info = self.core._normalize_info(self.core.last_info)
 
     def _cursor_off_grid(self) -> bool:
@@ -464,7 +1174,12 @@ class SMA4WhistleExecutor:
             )
             frames += elapsed2
             if not ok2:
-                self._sync_map_cursor(64, 80)
+                self._sync_map_cursor(
+                    64,
+                    80,
+                    reason="repair_stale_first_warp_zone_cursor",
+                    frame=frames,
+                )
                 frames += self._step((), 60)
                 ok2 = self._read_u8(self.core.WORLD) == self.WARP_ZONE_WORLD_RAW
             ok = ok and ok2
@@ -498,7 +1213,12 @@ class SMA4WhistleExecutor:
         if (self._cursor_off_grid()
                 or self._read_u8(self.core.MAP_CURSOR_X) != 64
                 or self._read_u8(self.core.MAP_CURSOR_Y) != 80):
-            self._sync_map_cursor(64, 80)
+            self._sync_map_cursor(
+                64,
+                80,
+                reason="repair_second_whistle_source_cursor",
+                frame=frames,
+            )
             frames += self._step((), 30)
         frames += self._open_and_use_selected_item()
         samples.append(self.sample("after_second_use_input", frames))
@@ -515,7 +1235,12 @@ class SMA4WhistleExecutor:
         # AcquireWhistle can leave cursor stuck below the 5-8 cell after the flip.
         if ok and self._read_u8(self.core.MAP_CURSOR_X) < 128:
             frames += self._step((), 300)
-            self._sync_map_cursor(128, 144)
+            self._sync_map_cursor(
+                128,
+                144,
+                reason="repair_second_warp_zone_destination_cursor",
+                frame=frames,
+            )
             frames += self._step((), 60)
         samples.append(self.sample("after_second_whistle_warp_zone_5_8", frames))
         if not ok:
@@ -563,18 +1288,144 @@ class Option:
     source: str | None = None
     verification: dict = field(default_factory=dict)
     verify_fn: Verifier | None = None
+    requires_snapshot: bool = False
 
     def applicable(self, state: MetaState, *, max_tier: KnowledgeTier) -> bool:
         return self.knowledge_tier <= max_tier and self.precondition(state)
 
     def execute(self, state: MetaState, context: OptionContext | None = None) -> OptionResult:
         context = context or OptionContext()
-        context.restore(state)
-        result = self.runner(state, context)
+        physical = self.requires_snapshot and context.executor is not None
+        symbolic_manifest_only = (
+            self.requires_snapshot and context.executor is None
+        )
+        restore_event = None
+        entry_digest = None
+        entry_observable = None
+        if physical:
+            if not context.restore(state):
+                restore_event = context.last_restore_event
+                boundary = {
+                    "option": self.id,
+                    "from": state.to_json(),
+                    "to": state.to_json(),
+                    "status": "missing_parent_snapshot",
+                    "restore": restore_event,
+                    "raw_hash_continuous": False,
+                    "composition_attested": False,
+                }
+                return OptionResult(
+                    success=False,
+                    state=state,
+                    info={
+                        "reason": "missing_parent_snapshot",
+                        "boundary": boundary,
+                    },
+                    boundary=boundary,
+                )
+            restore_event = context.last_restore_event
+            runtime_entry = context.executor.snapshot()
+            entry_digest = context.digest(runtime_entry).to_json()
+            entry_observable = context.observable()
+            if hasattr(context.executor, "begin_option_trace"):
+                context.executor.begin_option_trace(self.id, entry_digest)
+
+        try:
+            result = self.runner(state, context)
+        except Exception:
+            if physical and hasattr(context.executor, "end_option_trace"):
+                context.executor.end_option_trace()
+            raise
         if result.cost == OptionCost():
             result.cost = self.cost
-        if result.exit_snapshot is not None:
-            context.remember(result.state, result.exit_snapshot)
+        if symbolic_manifest_only:
+            result.info = dict(result.info)
+            result.info["execution_mode"] = "symbolic_manifest_only"
+            result.info["physical_boundary_evidence"] = False
+        if physical:
+            runner_supplied_exit = result.exit_snapshot
+            runner_supplied_exit_digest = (
+                context.digest(runner_supplied_exit).to_json()
+                if runner_supplied_exit is not None else None
+            )
+            # The committed successor is always the executor's live state at
+            # runner return.  A runner-supplied earlier snapshot is provenance,
+            # never a substitute paired with the live observable.
+            runtime_exit = context.executor.snapshot()
+            result.exit_snapshot = runtime_exit
+            exit_digest = context.digest(runtime_exit).to_json()
+            exit_observable = context.observable()
+            exit_adapter_context = context._adapter_context()
+            trace = (
+                context.executor.end_option_trace()
+                if hasattr(context.executor, "end_option_trace")
+                else {"option": self.id, "events": []}
+            )
+            decoded_meta = None
+            meta_comparison = None
+            if hasattr(context.executor, "decode_meta_state"):
+                decoded_meta = context.executor.decode_meta_state()
+                if hasattr(context.executor, "compare_meta_state"):
+                    meta_comparison = context.executor.compare_meta_state(
+                        result.state, decoded_meta)
+                    if result.success and not meta_comparison["matches"]:
+                        result.success = False
+                        result.info = dict(result.info)
+                        result.info["reason"] = (
+                            "declared_meta_state_mismatches_physical_exit"
+                        )
+            external_roots = [
+                event for event in trace.get("snapshot_restores", [])
+                if event.get("restore_kind") == "external_root"
+            ]
+            event_tiers = [
+                int(event["knowledge_tier"])
+                for event in trace.get("events", [])
+                if event.get("knowledge_tier") is not None
+            ]
+            effective_tier = max(
+                [int(self.knowledge_tier), *event_tiers]
+            )
+            boundary = {
+                "option": self.id,
+                "from": state.to_json(),
+                "to": result.state.to_json(),
+                "status": "success" if result.success else "failed",
+                "restore": restore_event,
+                "entry": entry_digest,
+                "entry_observable": entry_observable,
+                "exit": exit_digest,
+                "exit_observable": exit_observable,
+                "exit_adapter_context": exit_adapter_context,
+                "runner_supplied_exit_digest": runner_supplied_exit_digest,
+                "external_roots": external_roots,
+                "ram_writes": trace.get("ram_writes", []),
+                "events": trace.get("events", []),
+                "decoded_exit": decoded_meta,
+                "meta_state_comparison": meta_comparison,
+                "raw_hash_continuous": (
+                    bool(restore_event)
+                    and restore_event.get("status") == "restored_exact_bytes"
+                    and not external_roots
+                ),
+                "composition_attested": (
+                    bool(restore_event)
+                    and restore_event.get("status") in (
+                        "restored_exact_bytes",
+                        "restored_suffix_attested",
+                    )
+                    and not external_roots
+                ),
+                "declared_knowledge_tier": int(self.knowledge_tier),
+                "effective_knowledge_tier": effective_tier,
+            }
+            result.info = dict(result.info)
+            result.info["boundary"] = boundary
+            result.entry_digest = entry_digest
+            result.exit_digest = exit_digest
+            result.exit_observable = exit_observable
+            result.exit_adapter_context = exit_adapter_context
+            result.boundary = boundary
         return result
 
     def verify(self, executor: Any = None) -> bool:
@@ -596,6 +1447,7 @@ class Option:
             "exit_snapshot": self.exit_snapshot,
             "source": self.source,
             "verification": dict(self.verification),
+            "requires_snapshot": bool(self.requires_snapshot),
         }
 
 
@@ -630,7 +1482,11 @@ class MetaSearchResult:
     branches: int = 0
     option_calls: int = 0
     injected_facts: tuple[str, ...] = ()
+    attempted_injected_facts: tuple[str, ...] = ()
     discovered_effects: list[dict] = field(default_factory=list)
+    boundaries: list[dict] = field(default_factory=list)
+    path_evidence: list[dict] = field(default_factory=list)
+    alias_collisions: list[dict] = field(default_factory=list)
     visited: int = 0
     log: list[dict] = field(default_factory=list)
 
@@ -643,10 +1499,29 @@ class MetaSearchResult:
             "branches": self.branches,
             "option_calls": self.option_calls,
             "injected_facts": list(self.injected_facts),
+            "attempted_injected_facts": list(self.attempted_injected_facts),
             "discovered_effects": self.discovered_effects,
+            "boundaries": self.boundaries,
+            "path_evidence": self.path_evidence,
+            "alias_collisions": self.alias_collisions,
             "visited": self.visited,
             "log": self.log,
         }
+
+
+def _transition_evidence(option: Option, result: OptionResult) -> dict:
+    mode = result.info.get("execution_mode")
+    if mode is None:
+        mode = "physical_executor" if result.boundary is not None else "symbolic_model"
+    return {
+        "option": option.id,
+        "execution_mode": mode,
+        "physical_boundary_evidence": result.boundary is not None,
+        "boundary_status": (
+            result.boundary.get("status")
+            if result.boundary is not None else None
+        ),
+    }
 
 
 def search_options(library: OptionLibrary, start: MetaState,
@@ -664,31 +1539,48 @@ def search_options(library: OptionLibrary, start: MetaState,
     if goal(start):
         return MetaSearchResult(found=True, states=[start], visited=1)
 
-    queue = deque([(start, [], [start], OptionCost())])
+    queue = deque([
+        (start, [], [start], OptionCost(), frozenset(), [], [])
+    ])
     visited = {start}
     branches = 0
     option_calls = 0
-    injected: set[str] = set()
+    attempted_injected: set[str] = set()
     discovered: list[dict] = []
     log: list[dict] = []
 
     while queue:
-        state, path, states, cost = queue.popleft()
+        (state, path, states, cost, path_injected,
+         path_boundaries, path_evidence) = queue.popleft()
         if len(path) >= max_depth:
             continue
         for option in library.applicable(state, max_tier=max_tier):
             branches += 1
             option_calls += 1
-            injected.update(option.injected_facts)
             result = option.execute(state, context)
+            transition_injected = set(option.injected_facts)
+            transition_injected.update(result.info.get("injected_facts") or ())
+            attempted_injected.update(transition_injected)
             row = {
                 "from": state.to_json(),
                 "option": option.id,
                 "success": bool(result.success),
                 "knowledge_tier": int(option.knowledge_tier),
                 "opaque_effect": bool(option.opaque_effect),
+                "execution_mode": _transition_evidence(option, result),
             }
+            if result.boundary is not None:
+                row["boundary"] = result.boundary
+                if int(result.boundary.get(
+                        "effective_knowledge_tier",
+                        int(option.knowledge_tier))) > int(max_tier):
+                    row["success"] = False
+                    row["reason"] = "runtime_knowledge_tier_exceeds_max"
+                    log.append(row)
+                    continue
             if not result.success:
+                if result.info.get("reason"):
+                    row["reason"] = result.info["reason"]
                 log.append(row)
                 continue
             next_state = result.state
@@ -700,14 +1592,37 @@ def search_options(library: OptionLibrary, start: MetaState,
                     "to": next_state.to_json(),
                 }
                 observed = {"option": option.id, **observed}
-                discovered.append(observed)
+                if observed not in discovered:
+                    discovered.append(observed)
                 row["observed_effect"] = observed
             log.append(row)
+            if result.exit_snapshot is not None:
+                context.remember(
+                    next_state,
+                    result.exit_snapshot,
+                    producer=option.id,
+                    source={
+                        "kind": "option_exit",
+                        "option": option.id,
+                        "parent_state": state.to_json(),
+                    },
+                    observable=result.exit_observable,
+                    adapter_context=result.exit_adapter_context,
+                )
             if next_state in visited:
                 continue
             next_path = path + [option.id]
             next_states = states + [next_state]
             next_cost = cost + result.cost
+            next_injected = frozenset(
+                set(path_injected) | transition_injected
+            )
+            next_boundaries = path_boundaries + (
+                [result.boundary] if result.boundary is not None else []
+            )
+            next_evidence = path_evidence + [
+                _transition_evidence(option, result)
+            ]
             if goal(next_state):
                 return MetaSearchResult(
                     found=True,
@@ -716,20 +1631,34 @@ def search_options(library: OptionLibrary, start: MetaState,
                     total_cost=next_cost,
                     branches=branches,
                     option_calls=option_calls,
-                    injected_facts=tuple(sorted(injected)),
+                    injected_facts=tuple(sorted(next_injected)),
+                    attempted_injected_facts=tuple(sorted(attempted_injected)),
                     discovered_effects=discovered,
+                    boundaries=next_boundaries,
+                    path_evidence=next_evidence,
+                    alias_collisions=list(context.alias_collisions),
                     visited=len(visited) + 1,
                     log=log,
                 )
             visited.add(next_state)
-            queue.append((next_state, next_path, next_states, next_cost))
+            queue.append((
+                next_state,
+                next_path,
+                next_states,
+                next_cost,
+                next_injected,
+                next_boundaries,
+                next_evidence,
+            ))
 
     return MetaSearchResult(
         found=False,
         branches=branches,
         option_calls=option_calls,
-        injected_facts=tuple(sorted(injected)),
+        injected_facts=(),
+        attempted_injected_facts=tuple(sorted(attempted_injected)),
         discovered_effects=discovered,
+        alias_collisions=list(context.alias_collisions),
         visited=len(visited),
         log=log,
     )
@@ -782,7 +1711,13 @@ def load_sma4_clear_level_option(path: str | Path, *,
         if context.executor is not None and hasattr(context.executor, "execute_clear_solution"):
             executor_summary, exit_snapshot = context.executor.execute_clear_solution(
                 path, snapshot)
-            if not executor_summary.get("solved"):
+            if (
+                not executor_summary.get("solved")
+                or (
+                    executor_summary.get("settle_required", True)
+                    and not executor_summary.get("settled_to_map")
+                )
+            ):
                 return OptionResult(
                     success=False,
                     state=state,
@@ -793,9 +1728,13 @@ def load_sma4_clear_level_option(path: str | Path, *,
                         "executor_summary": executor_summary,
                     },
                 )
+        physical_final = (
+            dict(executor_summary.get("final_info") or {})
+            if executor_summary is not None else {}
+        )
         next_state = MetaState(
-            world=final_world,
-            node=final_cursor,
+            world=int(physical_final.get("world", final_world)),
+            node=tuple(physical_final.get("cursor") or final_cursor),
             cleared=state.cleared | clear_mask,
             inventory=state.inventory,
             flags=state.flags + (f"clear:{level_id}",),
@@ -825,7 +1764,7 @@ def load_sma4_clear_level_option(path: str | Path, *,
             "to_node": list(final_cursor),
             "flag": f"clear:{level_id}",
         },
-        injected_facts=(),
+        injected_facts=("cached_level_entry_snapshot",),
         entry_snapshot=snapshot,
         source=str(path),
         verification={
@@ -834,6 +1773,7 @@ def load_sma4_clear_level_option(path: str | Path, *,
             "replay_verified": bool(solution.get("replay_verified")),
             "rom_sha1": solution.get("rom_sha1"),
         },
+        requires_snapshot=True,
     )
 
 

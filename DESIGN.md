@@ -370,15 +370,24 @@ At the route layer:
 1. `MetaState` compresses world/map position, clears, inventory, and flags.
 2. An `Option` declares an initiation test, executor, termination result, and measured/symbolic
    cost.
-3. `OptionContext` maps symbolic states to emulator snapshots.
+3. `OptionContext` currently maps symbolic states to one emulator snapshot while recording exact
+   byte-backed state/context hashes, observable RAM/display hashes, producer/root provenance, and
+   restore attestations.
 4. greedy, breadth/uniform-cost, and execute-to-observe planners compose available options.
 
-The SMA4 implementation has real level/overworld executors and replayable 1-1/1-2 segments, but
-some route steps restore independent cached states or apply power/map/cursor interventions.
-`OptionContext` is also first-wins for a compressed `MetaState`, so distinct emulator states can
-alias. Until exact predecessor/entry hashes compose and alias tests pass, call this a **segmented
-option-planning prototype**. Report ROM frames, symbolic endpoint costs, and injected facts
-separately.
+The SMA4 implementation has real level/overworld executors and replayable 1-1/1-2 segments.
+One declared 1-2 root now reaches the real unpowered fortress through live
+`DOWN,DOWN,LEFT -> (96,96)` input with zero direct RAM writes. The whistle route still restores
+independent power-state roots and applies inventory/power/cursor interventions.
+
+The boundary audit also produced a concrete abstraction counterexample: opposite
+whistle-acquisition orders reach one `MetaState` with different physical emulator/RAM states.
+`OptionContext` now fails closed with `StateAliasError` instead of silently retaining the first
+representative. Search still uses `MetaState` as its frontier key, so the next architecture must
+retain multiple physical representatives and partition-refine them by complete deterministic
+option signatures. Until that passes and the live unpowered entry receives legitimate power, call
+this a **segmented option-planning prototype**. Report ROM frames, symbolic endpoint costs,
+attempted versus selected interventions, and physical versus symbolic path evidence separately.
 
 ---
 
@@ -398,12 +407,14 @@ mario_ai/
     policy.py                # compact tile policy
     entity_policy.py         # entity/temporal models and search priors
     consistency.py           # input perturbation consistency (not Stable-BC)
+    provenance.py            # deterministic state/artifact hashes and alias errors
     options.py               # option contracts, executors, BFS
     meta_planner.py          # greedy/uniform-cost SMA4 planning experiments
   scripts/
     solve_all_stock.py
     verify_stock_solutions.py
     policy_guided_search.py
+    diagnose_sma4_fortress_entry.py
     solve_sma4*.py / solve_sml.py
   data/solutions/            # small canonical replay manifests
   data/, runs/               # large generated artifacts (ignored)
@@ -428,10 +439,11 @@ The original V0–V5 sequence is preserved as project history:
 Current evidence gates, in order:
 
 1. Keep code/docs/manifests clean-clone coherent and replay-gate all stock claims.
-2. Remove or tier SMA4 state interventions; match exact predecessor/entry hashes.
-3. Formalize option initiation/termination/state sufficiency and add unknown-effect baselines.
-4. Re-solve 6-3; instrument moving-platform phase and variable action durations for 6-2.
-5. Test learned priors across levels without reducing solve rate.
+2. Preserve multiple physical SMA4 representatives and partition-refine by option signatures.
+3. Supply fortress power legitimately from the live lineage; remove or tier remaining interventions.
+4. Replace symbolic SMA4 endpoints and add matched unknown-effect baselines.
+5. Re-solve 6-3; instrument moving-platform phase and variable action durations for 6-2.
+6. Test learned priors across levels without reducing solve rate.
 
 ---
 
@@ -440,7 +452,8 @@ Current evidence gates, in order:
 - Which platform/enemy phase variables make 6-2 search state sufficiently Markov?
 - Do variable action durations `{1,2,4,8,16}` improve moving-platform search under equal budgets?
 - Can PHS/PHS* or Levin-style guidance retain completeness while capturing the local prior gain?
-- Which fields must be added to `MetaState` so equal symbolic states predict equal option outcomes?
+- Which distinctions belong in `MetaState`, and which should remain explicit physical/history
+  representatives, so equal abstract states have equal option outcome/cost signatures?
 - Does unknown-option planning still beat greedy after both receive the same learned/cached effect
   model and cost definition?
 
@@ -461,6 +474,11 @@ Current evidence gates, in order:
 - Chatterjee and Khardon, *Planning with Variable-duration Actions* (NeurIPS 2025) — relevant to
   moving platforms and P-speed.
 - Guez, Silver, and Dayan, *BAMCP* (NeurIPS 2012) — belief/history baseline for unknown options.
+- Ravindran and Barto, *SMDP Homomorphisms* (IJCAI 2003), and Castro and Precup,
+  *Using Bisimulation for Policy Transfer in MDPs* (AAAI 2010) — direct mathematics for testing
+  whether physical states may safely share an option-level abstraction.
+- Bai, Srivastava, and Russell, *Markovian State and Action Abstractions for MDPs via Hierarchical
+  MCTS* (IJCAI 2016) — history/representative planning when abstraction induces non-Markov state.
 - Data Crystal — *Super Mario Bros. RAM map*.
 - gym-super-mario-bros / nes-py (Kautenja) — NES environment and snapshot API.
 

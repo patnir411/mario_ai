@@ -6395,7 +6395,7 @@
   "injected_facts": [
     "pwing_fortress_entry_snapshot",
     "leaf_rehold_during_route",
-    "pspeed_poke_during_fly"
+    "pspeed_seeded_in_entry_snapshot"
   ],
   "exit_settle": {
     "up_max": 100,
@@ -6403,5 +6403,5 @@
     "b_hold": 40,
     "truncates_at_chest": true
   },
-  "notes": "W1 Fortress whistle from leaf fortress spawn (pwing entry), not mid-level door snap. Coverage prefix to x~1705; LEFT+B\u00d750 align; roof/chest script; UP+idle+B settle. Dropped fortress_door_entry_snapshot."
+  "notes": "W1 Fortress whistle from leaf fortress spawn (pwing entry), not mid-level door snap. The replay root already contains P-speed=127; the current executor performs no runtime PSPEED write, but conditionally re-holds POWERUP=3 after damage. Coverage prefix to x~1705; LEFT+B\u00d750 align; roof/chest script; UP+idle+B settle. Dropped fortress_door_entry_snapshot."
 }

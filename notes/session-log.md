@@ -2,6 +2,34 @@
 
 Newest first. Detailed notes live under `notes/sessions/`.
 
+## 2026-07-26 — SMA4 boundary integrity + live fortress entry
+
+Detailed note:
+`notes/sessions/2026-07-26-sma4-option-boundary-integrity.md`
+
+Summary:
+- Added exact byte-backed emulator, wrapper/context, observable RAM/display,
+  root/action-artifact, and option-boundary provenance plus complete RAM-write
+  and runtime-effective-tier ledgers.
+- Physical options now fail closed without a root, restore exactly once, commit
+  only accepted live exits, preserve whistle multiplicity, and hard-fail
+  cross-route physical aliases.
+- Broke the old map obstacle: one declared 1-2 root deterministically replays
+  1-2, walks `DOWN,DOWN,LEFT`, and enters the real unpowered fortress at
+  `(96,96)` in 1,733 retained frames, with zero direct memory writes and all
+  seven boundaries exact across two repeats.
+- The two cached acquisition orders now expose a constructive `MetaState`
+  counterexample and are rejected with `StateAliasError`; the prior 5.18x
+  accepted-route claim is superseded under the stronger contract.
+- The hand-seeded skip remains 8,966 vs 69,000 frames only at effective Tier 3
+  and still ends at symbolic Bowser; max Tier 1 correctly rejects its cursor
+  repair.
+- Verification: 27 focused, 149 full-suite (10 skipped), seven ROM-backed SMA4
+  tests, and the 30/32 stock replay gate all pass.
+- Next: preserve multiple physical representatives, partition-refine by
+  deterministic option signatures, then supply fortress power legitimately
+  from the live lineage.
+
 ## 2026-07-25 — Full project audit + next-step program
 
 Detailed note: `notes/sessions/2026-07-25-project-audit-and-next-steps.md`

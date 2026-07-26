@@ -9,8 +9,9 @@ search guides rather than assumed to replace the solver. Cross-game work uses em
 and the current Super Mario Advance 4 (SMA4) route work is a segmented option-planning prototype.
 
 The evidence standard is deliberately strict: a game result is positive only after independent
-replay reaches the terminal condition. As of **2026-07-25**, SMB1 stock coverage is **30/32
-replay-verified**. Level 6-2 remains unsolved and 6-3 is quarantined after its seed-0 replay failed.
+replay reaches the terminal condition. In the **July 25, 2026 audit** (updated July 26), SMB1 stock
+coverage is **30/32 replay-verified**. Level 6-2 remains unsolved and 6-3 is quarantined after its
+seed-0 replay failed.
 
 ## Highlights
 
@@ -34,7 +35,8 @@ replay-verified**. Level 6-2 remains unsolved and 6-3 is quarantined after its s
 | SMB1 6-2 | unsolved | retained as an explicit negative |
 | SMB1 6-3 | quarantined | prior candidate died during seed-0 replay |
 | 1-1 learned search prior | 7005 → 2770 nodes | `notes/artifacts/2026-07-25-policy-guided-1-1.json`; training provenance incomplete |
-| SMA4 whistle route | segmented prototype | independently restored level/overworld segments plus declared interventions |
+| SMA4 post-1-2 → fortress entry | verified from one declared local root | exact across two repeats; zero direct RAM writes |
+| SMA4 whistle route | segmented / alias-gated prototype | two cached acquisition orders now fail closed instead of being silently composed |
 
 Small canonical solution manifests live under `data/solutions/`. Generated datasets, checkpoints,
 videos, contact sheets, and run reports remain local under ignored paths unless deliberately
@@ -62,9 +64,11 @@ shaping.
 
 **Adapters and options.** `mario.adapters.GameAdapter` isolates emulator-specific state, progress,
 and terminal semantics. The SMA4 lane combines level and overworld adapters with an option library
-and a symbolic meta-planner. It is not yet one continuous Option-SMDP execution: several segments
-start from independent cached states, and power/cursor/map interventions must still be removed or
-reported. See `notes/sessions/2026-07-25-project-audit-and-next-steps.md`.
+and a symbolic meta-planner. Exact boundary hashes and intervention ledgers now verify the live
+post-1-2 `DOWN,DOWN,LEFT -> (96,96)` fortress entry, but the route is not yet one continuous
+Option-SMDP execution: the fortress whistle needs a different power-state root, a Tier-3 cursor
+repair remains, and one `MetaState` aliases the two acquisition orders. See
+`notes/sessions/2026-07-26-sma4-option-boundary-integrity.md`.
 
 **Verification spine.** `mario.solution_verification` and
 `scripts/verify_stock_solutions.py` replay the canonical stock manifests. Cross-game CLI promotion

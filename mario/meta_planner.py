@@ -41,6 +41,7 @@ from mario.options import (
     OptionCost,
     OptionResult,
     OptionLibrary,
+    _transition_evidence,
     search_options,
 )
 
@@ -89,13 +90,17 @@ def greedy_plan(library: OptionLibrary, start: MetaState,
     branches = 0
     option_calls = 0
     injected: set[str] = set()
+    attempted_injected: set[str] = set()
+    boundaries: list[dict] = []
+    path_evidence: list[dict] = []
     log: list[dict] = []
     seen: set[MetaState] = {start}
 
     for _ in range(max_steps):
         if goal(state):
             return _greedy_result(True, path, states, total, branches,
-                                  option_calls, injected, log)
+                                  option_calls, injected, attempted_injected,
+                                  boundaries, path_evidence, context, log)
         candidates = [
             opt for opt in library.applicable(state, max_tier=max_tier)
             if exploit_opaque or not opt.opaque_effect
@@ -103,14 +108,16 @@ def greedy_plan(library: OptionLibrary, start: MetaState,
         best: tuple[float, float, str] | None = None
         best_result = None
         best_option = None
+        best_injected: set[str] = set()
+        best_evidence = None
         cur_h = heuristic(state)
         for opt in candidates:
             branches += 1
             option_calls += 1
-            injected.update(opt.injected_facts)
-            # Symbolic options are pure; restore keeps ROM-backed trials clean.
-            context.restore(state)
             result = opt.execute(state, context)
+            transition_injected = set(opt.injected_facts)
+            transition_injected.update(result.info.get("injected_facts") or ())
+            attempted_injected.update(transition_injected)
             row = {
                 "from": state.to_json(),
                 "option": opt.id,
@@ -118,8 +125,20 @@ def greedy_plan(library: OptionLibrary, start: MetaState,
                 "knowledge_tier": int(opt.knowledge_tier),
                 "opaque_effect": bool(opt.opaque_effect),
                 "trial": True,
+                "execution_mode": _transition_evidence(opt, result),
             }
+            if result.boundary is not None:
+                row["boundary"] = result.boundary
+                if int(result.boundary.get(
+                        "effective_knowledge_tier",
+                        int(opt.knowledge_tier))) > int(max_tier):
+                    row["success"] = False
+                    row["reason"] = "runtime_knowledge_tier_exceeds_max"
+                    log.append(row)
+                    continue
             if not result.success:
+                if result.info.get("reason"):
+                    row["reason"] = result.info["reason"]
                 log.append(row)
                 continue
             h = heuristic(result.state)
@@ -133,12 +152,33 @@ def greedy_plan(library: OptionLibrary, start: MetaState,
                 best = key
                 best_result = result
                 best_option = opt
+                best_injected = transition_injected
+                best_evidence = _transition_evidence(opt, result)
         if best_option is None or best_result is None:
             break  # stuck: no predictable option improves progress
+        parent_state = state
         state = best_result.state
+        if best_result.exit_snapshot is not None:
+            context.remember(
+                state,
+                best_result.exit_snapshot,
+                producer=best_option.id,
+                source={
+                    "kind": "option_exit",
+                    "option": best_option.id,
+                    "parent_state": parent_state.to_json(),
+                },
+                observable=best_result.exit_observable,
+                adapter_context=best_result.exit_adapter_context,
+                replace_equivalent=True,
+            )
         path.append(best_option.id)
         states.append(state)
         total = total + best_result.cost
+        injected.update(best_injected)
+        if best_result.boundary is not None:
+            boundaries.append(best_result.boundary)
+        path_evidence.append(best_evidence)
         log.append({"commit": best_option.id, "to": state.to_json(),
                     "cost": best_result.cost.to_json()})
         if state in seen:
@@ -146,11 +186,13 @@ def greedy_plan(library: OptionLibrary, start: MetaState,
         seen.add(state)
 
     return _greedy_result(goal(state), path, states, total, branches,
-                          option_calls, injected, log)
+                          option_calls, injected, attempted_injected,
+                          boundaries, path_evidence, context, log)
 
 
 def _greedy_result(found, path, states, total, branches, option_calls,
-                   injected, log) -> MetaSearchResult:
+                   injected, attempted_injected, boundaries, path_evidence, context,
+                   log) -> MetaSearchResult:
     return MetaSearchResult(
         found=bool(found),
         path=list(path),
@@ -159,7 +201,11 @@ def _greedy_result(found, path, states, total, branches, option_calls,
         branches=branches,
         option_calls=option_calls,
         injected_facts=tuple(sorted(injected)),
+        attempted_injected_facts=tuple(sorted(attempted_injected)),
         discovered_effects=[],  # greedy never explores opaque options
+        boundaries=list(boundaries),
+        path_evidence=list(path_evidence),
+        alias_collisions=list(context.alias_collisions),
         visited=len(states),
         log=log,
     )
@@ -184,39 +230,59 @@ def search_options_uniform_cost(
     if goal(start):
         return MetaSearchResult(found=True, states=[start], visited=1)
 
-    frontier: list[tuple[float, int, MetaState, list[str], list[MetaState], OptionCost]] = [
-        (0.0, next(counter), start, [], [start], OptionCost())
+    frontier = [
+        (0.0, next(counter), start, [], [start], OptionCost(),
+         frozenset(), [], [])
     ]
     best_cost: dict[MetaState, float] = {start: 0.0}
     branches = 0
     option_calls = 0
-    injected: set[str] = set()
+    attempted_injected: set[str] = set()
     discovered: list[dict] = []
     log: list[dict] = []
 
     while frontier:
-        gcost, _, state, path, states, cost = heapq.heappop(frontier)
+        (gcost, _, state, path, states, cost,
+         path_injected, path_boundaries, path_evidence) = heapq.heappop(frontier)
         if gcost > best_cost.get(state, float("inf")):
             continue
         if goal(state):
             return MetaSearchResult(
                 found=True, path=path, states=states, total_cost=cost,
                 branches=branches, option_calls=option_calls,
-                injected_facts=tuple(sorted(injected)),
-                discovered_effects=discovered, visited=len(best_cost), log=log)
+                injected_facts=tuple(sorted(path_injected)),
+                attempted_injected_facts=tuple(sorted(attempted_injected)),
+                discovered_effects=discovered,
+                boundaries=path_boundaries,
+                path_evidence=path_evidence,
+                alias_collisions=list(context.alias_collisions),
+                visited=len(best_cost), log=log)
         if len(path) >= max_depth:
             continue
         for option in library.applicable(state, max_tier=max_tier):
             branches += 1
             option_calls += 1
-            injected.update(option.injected_facts)
-            context.restore(state)
             result = option.execute(state, context)
+            transition_injected = set(option.injected_facts)
+            transition_injected.update(result.info.get("injected_facts") or ())
+            attempted_injected.update(transition_injected)
             row = {"from": state.to_json(), "option": option.id,
                    "success": bool(result.success),
                    "knowledge_tier": int(option.knowledge_tier),
-                   "opaque_effect": bool(option.opaque_effect)}
+                   "opaque_effect": bool(option.opaque_effect),
+                   "execution_mode": _transition_evidence(option, result)}
+            if result.boundary is not None:
+                row["boundary"] = result.boundary
+                if int(result.boundary.get(
+                        "effective_knowledge_tier",
+                        int(option.knowledge_tier))) > int(max_tier):
+                    row["success"] = False
+                    row["reason"] = "runtime_knowledge_tier_exceeds_max"
+                    log.append(row)
+                    continue
             if not result.success:
+                if result.info.get("reason"):
+                    row["reason"] = result.info["reason"]
                 log.append(row)
                 continue
             nxt = result.state
@@ -226,20 +292,62 @@ def search_options_uniform_cost(
                 observed = result.observed_effect or {
                     "from": state.to_json(), "to": nxt.to_json()}
                 observed = {"option": option.id, **observed}
-                discovered.append(observed)
+                if observed not in discovered:
+                    discovered.append(observed)
                 row["observed_effect"] = observed
             log.append(row)
             new_cost = cost + result.cost
             g = gcost + cost_of(result.cost)
+            if result.exit_snapshot is not None and nxt in context.snapshot_records:
+                context.remember(
+                    nxt,
+                    result.exit_snapshot,
+                    producer=option.id,
+                    source={
+                        "kind": "option_exit",
+                        "option": option.id,
+                        "parent_state": state.to_json(),
+                    },
+                    observable=result.exit_observable,
+                    adapter_context=result.exit_adapter_context,
+                )
             if g < best_cost.get(nxt, float("inf")):
+                if result.exit_snapshot is not None:
+                    context.remember(
+                        nxt,
+                        result.exit_snapshot,
+                        producer=option.id,
+                        source={
+                            "kind": "option_exit",
+                            "option": option.id,
+                            "parent_state": state.to_json(),
+                        },
+                        observable=result.exit_observable,
+                        adapter_context=result.exit_adapter_context,
+                        replace_equivalent=True,
+                    )
                 best_cost[nxt] = g
                 heapq.heappush(frontier, (g, next(counter), nxt,
                                           path + [option.id],
-                                          states + [nxt], new_cost))
+                                          states + [nxt], new_cost,
+                                          frozenset(
+                                              set(path_injected)
+                                              | transition_injected),
+                                          path_boundaries + (
+                                              [result.boundary]
+                                              if result.boundary is not None
+                                              else []),
+                                          path_evidence + [
+                                              _transition_evidence(
+                                                  option, result)
+                                          ]))
 
     return MetaSearchResult(
         found=False, branches=branches, option_calls=option_calls,
-        injected_facts=tuple(sorted(injected)), discovered_effects=discovered,
+        injected_facts=(),
+        attempted_injected_facts=tuple(sorted(attempted_injected)),
+        discovered_effects=discovered,
+        alias_collisions=list(context.alias_collisions),
         visited=len(best_cost), log=log)
 
 
@@ -432,7 +540,7 @@ def build_sma4_whistle_rom_library(
         summary = executor.grant_whistles(2)
         next_state = _state_with(
             state,
-            inventory=("whistle",),
+            inventory=("whistle", "whistle"),
             flags=("two_whistles_hand_granted",),
         )
         return OptionResult(
@@ -455,6 +563,7 @@ def build_sma4_whistle_rom_library(
         opaque_effect=False,
         known_effect={"inventory_add": ["whistle"], "count": 2},
         injected_facts=("whistle_hand_granted", "two_whistles_hand_granted"),
+        requires_snapshot=True,
     ))
 
     def acquire_runner(state: MetaState, context: OptionContext) -> OptionResult:
@@ -470,7 +579,7 @@ def build_sma4_whistle_rom_library(
         next_state = _state_with(
             state,
             node=tuple(cursor) if cursor else None,
-            inventory=("whistle",),
+            inventory=state.inventory + ("whistle",),
             flags=flags,
         )
         return OptionResult(
@@ -500,6 +609,7 @@ def build_sma4_whistle_rom_library(
             "replay_verified": True,
             "inventory_item": 0x0C,
         },
+        requires_snapshot=True,
     ))
 
     def acquire_fortress_runner(state: MetaState,
@@ -516,7 +626,7 @@ def build_sma4_whistle_rom_library(
         next_state = _state_with(
             state,
             node=tuple(cursor) if cursor else None,
-            inventory=("whistle",),
+            inventory=state.inventory + ("whistle",),
             flags=flags,
         )
         return OptionResult(
@@ -544,7 +654,7 @@ def build_sma4_whistle_rom_library(
         injected_facts=(
             "pwing_fortress_entry_snapshot",
             "leaf_rehold_during_route",
-            "pspeed_poke_during_fly",
+            "pspeed_seeded_in_entry_snapshot",
         ),
         source="data/solutions/sma4/acquire_whistle_fortress.json",
         verification={
@@ -552,6 +662,7 @@ def build_sma4_whistle_rom_library(
             "replay_verified": True,
             "inventory_item": 0x0C,
         },
+        requires_snapshot=True,
     ))
 
     def use_first_runner(state: MetaState, context: OptionContext) -> OptionResult:
@@ -560,17 +671,14 @@ def build_sma4_whistle_rom_library(
             return OptionResult(False, state)
         summary = executor.use_first_whistle()
         final = _last_sample(summary)
-        # Keep a spare whistle for use_again when two were granted or both
-        # AcquireWhistle options have already fired.
-        keep_whistle = (
-            "two_whistles_hand_granted" in state.flags
-            or "two_whistles_acquired" in state.flags
-        )
+        remaining_inventory = list(state.inventory)
+        if "whistle" in remaining_inventory:
+            remaining_inventory.remove("whistle")
         next_state = _state_with(
             state,
             world=9,  # raw 8 special warp-zone map, not World 9
             node=tuple(final.get("cursor") or (64, 80)),
-            inventory=("whistle",) if keep_whistle else (),
+            inventory=tuple(remaining_inventory),
             flags=("warp_zone", "first_whistle_spent"),
         )
         return OptionResult(
@@ -591,6 +699,7 @@ def build_sma4_whistle_rom_library(
         knowledge_tier=KnowledgeTier.TIER1_ITEM_GIVEN,
         opaque_effect=True,
         injected_facts=("whistle_in_inventory",),
+        requires_snapshot=True,
     ))
 
     def use_second_runner(state: MetaState, context: OptionContext) -> OptionResult:
@@ -599,11 +708,14 @@ def build_sma4_whistle_rom_library(
             return OptionResult(False, state)
         summary = executor.use_second_whistle()
         final = _last_sample(summary)
+        remaining_inventory = list(state.inventory)
+        if "whistle" in remaining_inventory:
+            remaining_inventory.remove("whistle")
         next_state = _state_with(
             state,
             world=9,
             node=tuple(final.get("cursor") or (128, 144)),
-            inventory=(),
+            inventory=tuple(remaining_inventory),
             flags=("warp_zone_5_8", "second_whistle_spent"),
         )
         return OptionResult(
@@ -625,6 +737,7 @@ def build_sma4_whistle_rom_library(
         opaque_effect=True,
         # No inventory re-grant: second spend needs a real remaining whistle.
         injected_facts=(),
+        requires_snapshot=True,
     ))
 
     def select_runner(state: MetaState, context: OptionContext) -> OptionResult:
@@ -653,11 +766,14 @@ def build_sma4_whistle_rom_library(
     lib.add(Option(
         id="select_world8_pipe",
         kind="NavigateWarpZone",
-        precondition=lambda s: "warp_zone_5_8" in s.flags,
+        precondition=lambda s: (
+            "warp_zone_5_8" in s.flags and "world8_map" not in s.flags
+        ),
         runner=select_runner,
         knowledge_tier=KnowledgeTier.TIER1_ITEM_GIVEN,
         opaque_effect=True,
         injected_facts=("selected_world8_pipe",),
+        requires_snapshot=True,
     ))
     return lib
 
@@ -688,7 +804,11 @@ def run_whistle_benchmark(config: WhistleBenchmarkConfig | None = None, *,
             "branches": res.branches,
             "option_calls": res.option_calls,
             "injected_facts": list(res.injected_facts),
+            "attempted_injected_facts": list(res.attempted_injected_facts),
             "discovered_effects": res.discovered_effects,
+            "option_boundaries": res.boundaries,
+            "path_evidence": res.path_evidence,
+            "alias_collisions": res.alias_collisions,
             "discovered_whistle_skip": discovered_skip,
             "used_whistle": used_whistle,
         }

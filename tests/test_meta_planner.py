@@ -153,7 +153,7 @@ class FakeWhistleExecutor:
             "injected_facts": [
                 "pwing_fortress_entry_snapshot",
                 "leaf_rehold_during_route",
-                "pspeed_poke_during_fly",
+                "pspeed_seeded_in_entry_snapshot",
             ],
         }
 

@@ -25,7 +25,7 @@ to two `0x0C` (executor copies slots before replaying).
 |---|---|
 | `pwing_fortress_entry_snapshot` | Leaf fortress spawn entry (replaces mid-level door snap) |
 | `leaf_rehold_during_route` | POWERUP re-written if damage drops form |
-| `pspeed_poke_during_fly` | P-meter poke during the roof takeoff |
+| `pspeed_seeded_in_entry_snapshot` | Entry root already has P-speed=127; the July 26 write-ledger audit confirmed no runtime P-speed poke |
 | `prior_whistle_inventory_merged` | Only when chaining after another acquire |
 | ~~`fortress_door_entry_snapshot`~~ | **REMOVED** — coverage prefix from pwing spawn to door |
 | ~~`fortress_inventory_rehosted_to_pre_door_map`~~ | **REMOVED** — `B`-settle unlocks L-menu |
@@ -78,10 +78,11 @@ blocked still skips (`runs/20260715-sma4-whistle-rom-bench-norehost-{open,blocke
 ## Door-snap burn (2026-07-17)
 
 Replaced mid-level door entry with pwing-spawn + coverage door prefix + align.
-Dropped `fortress_door_entry_snapshot`. Still injected: pwing fortress entry,
-leaf/pspeed rehold.
+Dropped `fortress_door_entry_snapshot`. Still injected: P-Wing fortress entry,
+leaf rehold, and P-speed seeded in that entry root. The former
+`pspeed_poke_during_fly` label was corrected by the July 26 runtime ledger.
 
 ## Next honesty burn
 
-Live overworld→`(96,96)`→enter (drop `pwing_fortress_entry_snapshot`), and/or
-drop leaf/pspeed rehold.
+Live overworld→`(96,96)`→enter (drop `pwing_fortress_entry_snapshot`), then
+supply power legitimately and drop the leaf rehold/root-seeded P-speed.

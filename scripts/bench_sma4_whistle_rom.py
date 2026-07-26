@@ -36,6 +36,7 @@ from mario.options import (  # noqa: E402
     SMA4WhistleExecutor,
     search_options,
 )
+from mario.provenance import StateAliasError  # noqa: E402
 
 
 def _goal(state: MetaState) -> bool:
@@ -71,10 +72,15 @@ def _report(name: str, result: MetaSearchResult) -> dict:
         "branches": result.branches,
         "option_calls": result.option_calls,
         "injected_facts": list(result.injected_facts),
+        "attempted_injected_facts": list(result.attempted_injected_facts),
         "discovered_effects": result.discovered_effects,
+        "option_boundaries": result.boundaries,
+        "path_evidence": result.path_evidence,
+        "alias_collisions": result.alias_collisions,
         "discovered_whistle_skip": _discovered_rom_skip(result),
         "used_whistle": any(p.startswith("use_whistle") for p in result.path),
         "states": [s.to_json() for s in result.states],
+        "attempt_log": result.log,
     }
 
 
@@ -83,18 +89,44 @@ def _run_one(planner: str, cfg: SMA4WhistleROMConfig,
     core, start, context = _fresh_context()
     try:
         lib = build_sma4_whistle_rom_library(cfg)
-        if planner == "greedy":
-            result = greedy_plan(lib, start, _goal, max_tier=max_tier,
-                                 context=context)
-        elif planner == "bfs":
-            result = search_options(lib, start, _goal, max_tier=max_tier,
-                                    context=context, max_depth=16)
-        elif planner == "uniform_cost":
-            result = search_options_uniform_cost(
-                lib, start, _goal, max_tier=max_tier, context=context,
-                max_depth=16)
-        else:
-            raise ValueError(planner)
+        try:
+            if planner == "greedy":
+                result = greedy_plan(lib, start, _goal, max_tier=max_tier,
+                                     context=context)
+            elif planner == "bfs":
+                result = search_options(lib, start, _goal, max_tier=max_tier,
+                                        context=context, max_depth=16)
+            elif planner == "uniform_cost":
+                result = search_options_uniform_cost(
+                    lib, start, _goal, max_tier=max_tier, context=context,
+                    max_depth=16)
+            else:
+                raise ValueError(planner)
+        except StateAliasError as exc:
+            return {
+                "planner": planner,
+                "found": False,
+                "plan": [],
+                "hops": 0,
+                "frames": 0,
+                "branches": 0,
+                "option_calls": 0,
+                "injected_facts": [],
+                "attempted_injected_facts": [],
+                "discovered_effects": [],
+                "option_boundaries": [],
+                "path_evidence": [],
+                "alias_collisions": list(context.alias_collisions),
+                "discovered_whistle_skip": False,
+                "used_whistle": False,
+                "states": [start.to_json()],
+                "attempt_log": [],
+                "hard_gate_failure": {
+                    "kind": "StateAliasError",
+                    "message": str(exc),
+                    "collision": exc.collision,
+                },
+            }
         return _report(planner, result)
     finally:
         core.close()
@@ -127,8 +159,9 @@ def run_benchmark(cfg: SMA4WhistleROMConfig, *,
                 "warpless advance and Bowser are symbolic stand-ins; "
                 "hand_granted=True supplies two inventory whistles (no warp-zone "
                 "re-grant); hand_granted=False uses Tier-2 acquire_whistle_1_3 "
-                "+ acquire_whistle_fortress (door-entry snapshot + roof/chest; "
-                "inventory merge stacks the second 0x0C)"),
+                "+ acquire_whistle_fortress (independent P-Wing/leaf roots; "
+                "inventory merge stacks the second 0x0C); boundary reports "
+                "separate declared/effective tiers and all interventions"),
         },
         "rom": {
             "game": "Super Mario Advance 4 / SMB3",
@@ -147,9 +180,26 @@ def run_benchmark(cfg: SMA4WhistleROMConfig, *,
             "cheapest_whistle_frames": cheapest,
             "skip_cost_reduction_x": round(speedup, 2) if speedup else None,
             "thesis": (
-                "myopic planning cannot value the opaque whistle route; "
-                "resettable meta-search executes the ROM-backed options, observes "
-                "raw world 7 (World 8), and exploits the discovered payoff"),
+                (
+                    "myopic planning cannot value the opaque whistle route; "
+                    "resettable meta-search executes the ROM-backed options, "
+                    "observes raw world 7 (World 8), and exploits the payoff"
+                )
+                if reports["uniform_cost"]["discovered_whistle_skip"]
+                else (
+                    "no whistle route was accepted because a physical-state "
+                    "alias failed closed; inspect hard_gate_failure and its "
+                    "retained/rejected physical states before making a "
+                    "planner-comparison claim"
+                )
+                if reports["uniform_cost"].get("hard_gate_failure")
+                else (
+                    "no whistle route was accepted under the requested "
+                    "knowledge tier; any found route is the symbolic warpless "
+                    "fallback, so inspect attempted transitions before making "
+                    "a planner-comparison claim"
+                )
+            ),
         },
     }
 

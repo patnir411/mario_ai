@@ -1,6 +1,6 @@
 # Research Bibliography and Consolidated Field Notes
 
-Last verified: 2026-07-25.
+Last verified: 2026-07-26 (July 25 audit follow-up).
 
 This file consolidates the literature and tool references that informed the V4-V6 direction, the
 generalist-policy reassessment, the "net serves search" pivot, the small-LLM/VLM discussion, and
@@ -70,8 +70,12 @@ variable-duration actions, selective policy handoff, and reliable evaluation.
      planning scaffold, but cached entry restores, state writes, symbolic endpoints,
      and an intentionally nonexploring greedy baseline prevent an end-to-end
      Option-SMDP claim.
-   - The next gate is exact predecessor-exit composition plus a full intervention
-     and state-abstraction audit.
+   - Exact boundary instrumentation now gives a constructive counterexample to
+     `MetaState` sufficiency: opposite whistle-acquisition orders reach one
+     symbolic warp state with different physical emulator/RAM states. The
+     current gate is multi-representative physical search plus option-signature
+     partition refinement, followed by legitimate power acquisition from the
+     live unpowered fortress entry.
 
 ## References
 
@@ -500,6 +504,14 @@ Secondary, conditional leads:
     identical state-clone and step workloads. Adopt only if end-to-end
     nodes/second improves enough to justify a new integration surface.
 
+- Official mGBA scripting API.
+  - Docs: https://mgba.io/docs/scripting.html
+  - Repo relevance: exposes savestate buffers, CPU registers, and memory
+    domains, but does not promise byte-canonical savestate serialization. Keep
+    raw SHA-256 as a strong identity witness rather than an equivalence test;
+    use RAM/wrapper checks and multiple fixed input suffixes only as explicitly
+    finite behavioral falsifiers.
+
 - SMB3 warp whistles / any% route (for the M4 resource-aware skip).
   - StrategyWiki: https://strategywiki.org/wiki/Super_Mario_Bros._3/Warp_Whistles
   - Repo relevance: the W1→W8 whistle route is the planned showcase of consumable foresight;
@@ -529,6 +541,36 @@ Secondary, conditional leads:
   - arXiv HTML: https://arxiv.org/html/2509.00338v2
   - Repo relevance: modern option-learning at scale; contrast — we need verified few options, not
     billions of samples of option discovery.
+
+### State abstraction at option boundaries (2026-07-26 refresh)
+
+- Balaraman Ravindran, Andrew G. Barto, "SMDP Homomorphisms: An Algebraic
+  Approach to Abstraction in Semi-Markov Decision Processes", IJCAI 2003.
+  - Official paper: https://www.ijcai.org/Proceedings/03/Papers/145.pdf
+  - Repo experiment: enumerate every concrete boundary representative's
+    deterministic option signature—success/termination, successor block,
+    duration/cost, interventions, and physical digest—and partition-refine from
+    `MetaState`. Same symbolic label alone does not establish an SMDP
+    homomorphism.
+
+- Pablo Samuel Castro, Doina Precup, "Using Bisimulation for Policy Transfer in
+  MDPs", AAAI 2010.
+  - AAAI: https://ojs.aaai.org/index.php/AAAI/article/view/7751
+  - PDF: https://ojs.aaai.org/index.php/AAAI/article/download/7751/7611
+  - Repo experiment: execute every admissible option from both representatives
+    of the observed whistle-acquisition-order alias. Reject merging when option
+    cost/duration, success/termination, intervention tier, or successor refined
+    class differs. This separates behaviorally material aliases from
+    noncanonical serialization.
+
+- Aijun Bai, Siddharth Srivastava, Stuart Russell, "Markovian State and Action
+  Abstractions for MDPs via Hierarchical MCTS", IJCAI 2016.
+  - Official paper: https://www.ijcai.org/Proceedings/16/Papers/430.pdf
+  - Repo experiment: compare one-representative `MetaState`, `(MetaState,
+    physical boundary identity)` multi-representative UCS, and `(MetaState,
+    incremental option-history hash)` search on generated alias graphs and
+    SMA4. Full POMCP is premature because each emulator branch exposes its
+    concrete snapshot.
 
 ### IL / distillation nuance (2026-07-14 re-read)
 
