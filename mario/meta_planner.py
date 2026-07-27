@@ -479,7 +479,7 @@ def _last_sample(summary: dict) -> dict:
 
 def _observed_from_summary(summary: dict, *, label: str) -> dict:
     final = _last_sample(summary)
-    return {
+    observed = {
         "label": label,
         "raw_world": final.get("world_raw_0_indexed"),
         "world": final.get("world_normalized"),
@@ -487,6 +487,16 @@ def _observed_from_summary(summary: dict, *, label: str) -> dict:
         "mode": final.get("mode"),
         "samples": summary.get("samples", []),
     }
+    for key in (
+        "world8_acceptance",
+        "cursor_responsive",
+        "terminal_invariants",
+        "retained_cost_frames",
+        "evaluation_frames",
+    ):
+        if key in summary:
+            observed[key] = summary[key]
+    return observed
 
 
 def build_sma4_whistle_rom_library(

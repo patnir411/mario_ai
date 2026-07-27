@@ -1,9 +1,11 @@
-"""Deterministic state and artifact provenance for emulator-backed experiments.
+"""Deterministic byte-artifact provenance for emulator-backed experiments.
 
-The GBA adapters expose the complete emulator savestate as bytes.  For those
-backends ``snapshot_digest`` is an exact byte-level identity check.  Other
-structured snapshots may still receive a deterministic digest, but the returned
-``exact`` flag stays false unless the raw emulator payload is byte-addressable.
+The GBA adapters expose the emulator serialization payload as bytes.  For those
+backends ``snapshot_digest`` identifies the exact returned bytes; it does *not*
+assert that unequal payloads are unequal physical states.  Stable-Retro/mGBA can
+leave unused serialization slots noncanonical.  Other structured snapshots may
+still receive a deterministic digest, but the returned ``exact`` flag stays
+false unless the raw emulator payload itself is byte-addressable.
 """
 from __future__ import annotations
 
@@ -111,7 +113,7 @@ def stable_encode(value: Any) -> bytes:
 
 @dataclass(frozen=True)
 class SnapshotDigest:
-    """Identity of an in-memory snapshot plus its future-determining context."""
+    """Identity of snapshot bytes/metadata plus the declared adapter context."""
 
     full_sha256: str
     emulator_sha256: str
@@ -142,7 +144,7 @@ def snapshot_digest(
     backend: str | None = None,
     rom_sha1: str | None = None,
 ) -> SnapshotDigest:
-    """Hash a snapshot with domain-separated emulator and wrapper identities."""
+    """Hash a snapshot with domain-separated byte and wrapper identities."""
     if (
         isinstance(snapshot, tuple)
         and len(snapshot) == 2

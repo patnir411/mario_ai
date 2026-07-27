@@ -2,6 +2,39 @@
 
 Newest first. Detailed notes live under `notes/sessions/`.
 
+## 2026-07-27 — SMA4 physical representatives + finite refinement
+
+Detailed note:
+`notes/sessions/2026-07-27-sma4-physical-representative-refinement.md`
+
+Summary:
+- Added opt-in BFS/UCS keyed by `(MetaState, physical_record_id)` while
+  preserving the strict legacy `StateAliasError` contract. Exact duplicates
+  share a record; raw-distinct histories coexist; symbolic edges cannot borrow
+  an unrelated physical snapshot.
+- Added repeated normalized-outcome plus finite physical-exit attestations,
+  complete option-table reporting, conflict-safe fixed-point partition
+  refinement, content-addressed blocks, and distinguishing option suffixes.
+- Normal-order Tier 3 preserves 12 physical representatives. BFS and UCS both
+  find the same 13,320-frame mixed path; both acquisition orders reach the
+  World-8 selection test, but only 1-3-then-fortress yields an
+  input-responsive cursor. The reverse order reaches raw World 8 with zero
+  whistles but remains stuck.
+- The 12-record, finite-library table is complete, repeated twice per enabled
+  option, conflict-free, and closed under modeled physical successors. All
+  classes are singletons; this is empirical finite conformance, not global
+  bisimulation or a live-frontier merge.
+- Added the July 25-cutoff research bridge to SMDP homomorphisms, recursive MDP
+  minimization, skill-driven abstractions, active automata learning,
+  predictive-state tests, PUMA, and the July 20 L-SCALE emulator/snapshot work.
+- Verification: 41 focused; 163 full-suite passed with ten expected skips;
+  seven ROM-backed SMA4 tests passed; stock replay remains 30/32. Final
+  normal/reversed Tier-3 and Tier-2 report gates are specified in the detailed
+  note.
+- Next: diff the two second-whistle lineages, generate an input-only
+  distinguishing/repair suffix, remove the Tier-3 cursor writes, and rerun at
+  maximum Tier 2.
+
 ## 2026-07-26 — SMA4 boundary integrity + live fortress entry
 
 Detailed note:

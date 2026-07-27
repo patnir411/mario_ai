@@ -1,6 +1,7 @@
 # Research Bibliography and Consolidated Field Notes
 
-Last verified: 2026-07-26 (July 25 audit follow-up).
+Research availability cutoff: **2026-07-25**. Repository verification updated
+2026-07-27 in America/Detroit; no post-cutoff source is used.
 
 This file consolidates the literature and tool references that informed the V4-V6 direction, the
 generalist-policy reassessment, the "net serves search" pivot, the small-LLM/VLM discussion, and
@@ -73,9 +74,13 @@ variable-duration actions, selective policy handoff, and reliable evaluation.
    - Exact boundary instrumentation now gives a constructive counterexample to
      `MetaState` sufficiency: opposite whistle-acquisition orders reach one
      symbolic warp state with different physical emulator/RAM states. The
-     current gate is multi-representative physical search plus option-signature
-     partition refinement, followed by legitimate power acquisition from the
-     live unpowered fortress entry.
+   Opt-in multi-representative physical search and finite option-signature
+   refinement now preserve both acquisition histories. They separate under
+   short option suffixes: only the 1-3-then-fortress order reaches an
+   input-responsive World-8 map in the current Tier-3 implementation. The
+   immediate gate is to explain that lineage asymmetry, remove the Tier-3
+   cursor repair, and then join legitimate power acquisition to the live
+   unpowered fortress entry.
 
 ## References
 
@@ -542,16 +547,28 @@ Secondary, conditional leads:
   - Repo relevance: modern option-learning at scale; contrast — we need verified few options, not
     billions of samples of option discovery.
 
-### State abstraction at option boundaries (2026-07-26 refresh)
+### State abstraction at option boundaries (July 25 literature cutoff; July 26–27 implementation)
 
 - Balaraman Ravindran, Andrew G. Barto, "SMDP Homomorphisms: An Algebraic
   Approach to Abstraction in Semi-Markov Decision Processes", IJCAI 2003.
   - Official paper: https://www.ijcai.org/Proceedings/03/Papers/145.pdf
   - Repo experiment: enumerate every concrete boundary representative's
-    deterministic option signature—success/termination, successor block,
-    duration/cost, interventions, and physical digest—and partition-refine from
-    `MetaState`. Same symbolic label alone does not establish an SMDP
-    homomorphism.
+    repeat-conformant option signature—applicability, success/termination,
+    successor refined block or symbolic state, retained duration/reported cost,
+    effective tier, terminal invariants, and semantic interventions—and
+    partition-refine from `MetaState`. Raw/full state digests, record IDs,
+    producer/history, display hashes, and source file hashes remain
+    identity/provenance witnesses only. Same symbolic label alone does not
+    establish an SMDP homomorphism.
+
+- Robert Givan, Thomas Dean, Matthew Greig, "Equivalence Notions and Model
+  Minimization in Markov Decision Processes", *Artificial Intelligence* 147,
+  2003.
+  - Publisher: https://www.sciencedirect.com/science/article/pii/S0004370202003764
+  - DOI: https://doi.org/10.1016/S0004-3702(02)00376-4
+  - Repo experiment: iteratively compare option outcomes into current successor
+    blocks rather than treating one-step or raw-state agreement as sufficient.
+    This is the recursive backbone of the new fixed-point report.
 
 - Pablo Samuel Castro, Doina Precup, "Using Bisimulation for Policy Transfer in
   MDPs", AAAI 2010.
@@ -563,6 +580,13 @@ Secondary, conditional leads:
     class differs. This separates behaviorally material aliases from
     noncanonical serialization.
 
+- Pablo Samuel Castro, Prakash Panangaden, Doina Precup, "Equivalence Relations
+  in Fully and Partially Observable Markov Decision Processes", IJCAI 2009.
+  - Official paper: https://www.ijcai.org/Proceedings/09/Papers/276.pdf
+  - Repo experiment: distinguish finite trace/suffix evidence from recursive
+    bisimulation. Fixed input suffixes are useful falsifiers; finite matching
+    traces alone never authorize a global equivalence claim.
+
 - Aijun Bai, Siddharth Srivastava, Stuart Russell, "Markovian State and Action
   Abstractions for MDPs via Hierarchical MCTS", IJCAI 2016.
   - Official paper: https://www.ijcai.org/Proceedings/16/Papers/430.pdf
@@ -571,6 +595,87 @@ Secondary, conditional leads:
     incremental option-history hash)` search on generated alias graphs and
     SMA4. Full POMCP is premature because each emulator branch exposes its
     concrete snapshot.
+
+- Alper Ahmetoglu, Steven James, Cameron Allen, Sam Lobel, David Abel, George
+  Konidaris, "Skill-Driven Neurosymbolic State Abstractions", NeurIPS 2025.
+  - Official proceedings:
+    https://papers.nips.cc/paper_files/paper/2025/hash/0fa694fb9f1e265117e8da75966820fe-Abstract-Conference.html
+  - Repo experiment: construct the abstraction around the actual option set,
+    including initiation, transition, duration/reward, and goal distinctions.
+    Treat each retained local emulator record as a delta distribution first;
+    do not place a learned encoder in authority over exact replay.
+
+- Robert Paige, Robert E. Tarjan, "Three Partition Refinement Algorithms",
+  *SIAM Journal on Computing* 16(6), 1987.
+  - Publisher/DOI: https://epubs.siam.org/doi/abs/10.1137/0216062
+  - Repo experiment: retain the current transparent fixed-point pass for the
+    12-record graph; move to a worklist/incremental coarsest-partition algorithm
+    only when measured graph size makes it necessary.
+
+- Dana Angluin, "Learning Regular Sets from Queries and Counterexamples",
+  *Information and Computation* 75(2), 1987.
+  - Publisher: https://www.sciencedirect.com/science/article/pii/0890540187900526
+  - Repo experiment: treat exact emulator restores as membership-query roots
+    and option/input suffixes as counterexamples to candidate state merges.
+    The local system is partial, costed, intervention-tiered, and SMDP-like, so
+    this is an architectural analogy rather than a direct DFA reduction.
+
+- Thorsten Wißmann, Stefan Milius, Lutz Schröder, "Explaining Behavioural
+  Inequivalence Generically in Quasilinear Time", CONCUR 2021.
+  - Open proceedings/DOI:
+    https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.CONCUR.2021.32
+  - Repo experiment: attach a compact distinguishing option suffix to every
+    refinement split. The current report already returns
+    `use_whistle_again` and `select_world8_pipe` witnesses for the two
+    acquisition-order alias pairs.
+
+- Michael R. James, Satinder Singh, "Learning and Discovery of Predictive State
+  Representations in Dynamical Systems with Reset", ICML 2004.
+  - Official paper:
+    https://icml.cc/Conferences/2004/proceedings/papers/117.pdf
+  - Repo experiment: learn a compact basis of predictive option/input tests
+    only after exact records and resettable counterexamples exist. Validate the
+    basis on held-out suffixes before using it for live frontier dominance.
+
+- Mark Leon Giraud, Bastian Engel, Lea Nasarek, Yannis Storrer, Philipp Takacs,
+  Leon Philipp Wittemund, "L-SCALE: Locality-Sensitive Coverage for Automata
+  LEarning", AST 2026.
+  - Institutional record:
+    https://publikationen.bibliothek.kit.edu/1000195438
+  - DOI: https://doi.org/10.1145/3793654.3793755
+  - Availability: published online 2026-07-20, inside the July 25 cutoff.
+  - Repo experiment: borrow snapshot-backed active suffix testing and an
+    inspectable learned automaton. Do not use TLSH/locality-sensitive similarity
+    as authority to merge physical game states; threshold-sensitive approximate
+    hashes may prioritize tests but a false merge can fabricate a route.
+
+- Francesco Percassi, Alessandro Saetti, Enrico Scala, "Planning with Uncertain
+  Action Models", AAAI 2026.
+  - Official proceedings:
+    https://ojs.aaai.org/index.php/AAAI/article/view/40954
+  - DOI: https://doi.org/10.1609/aaai.v40i43.40954
+  - Repo experiment: compare execute-to-observe search with a PUMA-like
+    effect-cache planner, but cache an observed effect only within a refined
+    physical class. PUMA assumes execution reveals a reusable action model;
+    SMA4 has not earned reuse across hidden lineages.
+
+#### Local Stable-Retro/mGBA serialization diagnosis
+
+- Stable-Retro 1.0.1, `src/retro.cpp`, savestate allocation:
+  https://github.com/Farama-Foundation/stable-retro/blob/v1.0.1/src/retro.cpp#L51-L55
+- Python C API, `PyBytes_FromStringAndSize(NULL, size)` leaves contents
+  uninitialized:
+  https://docs.python.org/3/c-api/bytes.html#c.PyBytes_FromStringAndSize
+- Stable-Retro's vendored mGBA `retro_serialize`:
+  https://github.com/Farama-Foundation/stable-retro/blob/v1.0.1/cores/gba/src/platform/libretro/libretro.c#L614-L631
+- Vendored mGBA GBA I/O serialization:
+  https://github.com/Farama-Foundation/stable-retro/blob/v1.0.1/cores/gba/src/gba/io.c#L918-L945
+- Local finding: five no-step samples after restoring
+  `runs/sma4_cache/1-fortress_real_entry.pkl` produced three raw hashes; 256–643
+  bytes differed, all below offset `0x800`, with zero differences at or above
+  `0x800`. This supports a narrow diagnosis of noncanonical unused
+  serialization slots. Equal bytes remain exact artifact identity; unequal
+  bytes alone are not physical inequality.
 
 ### IL / distillation nuance (2026-07-14 re-read)
 

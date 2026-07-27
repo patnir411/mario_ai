@@ -125,6 +125,8 @@ class OptionResult:
     exit_observable: dict | None = None
     exit_adapter_context: dict | None = None
     boundary: dict | None = None
+    entry_record_id: int | None = None
+    exit_record_id: int | None = None
 
 
 @dataclass
@@ -137,6 +139,8 @@ class SnapshotRecord:
     observable: dict = field(default_factory=dict)
     producer: str | None = None
     source: dict = field(default_factory=dict)
+    state: MetaState | None = None
+    record_id: int | None = None
 
     def to_json(self) -> dict:
         return {
@@ -145,6 +149,24 @@ class SnapshotRecord:
             "observable": dict(self.observable),
             "producer": self.producer,
             "source": dict(self.source),
+            "state": self.state.to_json() if self.state is not None else None,
+            "record_id": self.record_id,
+        }
+
+
+@dataclass(frozen=True)
+class SnapshotCommit:
+    """Result of adding one successful physical transition to a context."""
+
+    status: str
+    record_id: int | None
+    record: SnapshotRecord | None = None
+
+    def to_json(self) -> dict:
+        return {
+            "status": self.status,
+            "record_id": self.record_id,
+            "record": self.record.to_json() if self.record is not None else None,
         }
 
 
@@ -154,15 +176,32 @@ class OptionContext:
 
     executor: Any = None
     snapshots: dict[MetaState, Any] = field(default_factory=dict)
+    alias_policy: str = "error"
     snapshot_records: dict[MetaState, SnapshotRecord] = field(
+        default_factory=dict, init=False)
+    physical_records: dict[int, SnapshotRecord] = field(
+        default_factory=dict, init=False)
+    record_ids_by_state: dict[MetaState, list[int]] = field(
+        default_factory=dict, init=False)
+    exact_record_index: dict[tuple[MetaState, str], int] = field(
+        default_factory=dict, init=False)
+    record_arrivals: dict[int, list[dict]] = field(
         default_factory=dict, init=False)
     alias_collisions: list[dict] = field(default_factory=list, init=False)
     restore_events: list[dict] = field(default_factory=list, init=False)
     last_restore_event: dict | None = field(default=None, init=False)
+    _next_record_id: int = field(default=0, init=False)
 
     def __post_init__(self) -> None:
-        for state, snap in self.snapshots.items():
-            self.snapshot_records[state] = self._record(
+        if self.alias_policy not in ("error", "multi"):
+            raise ValueError(
+                "alias_policy must be 'error' (legacy strict mode) or 'multi'"
+            )
+        declared = list(self.snapshots.items())
+        self.snapshots = {}
+        for state, snap in declared:
+            self.add_root(
+                state,
                 snap,
                 producer="initial_context",
                 source={"kind": "declared_root"},
@@ -220,7 +259,9 @@ class OptionContext:
     def _record(self, snapshot: Any, *, producer: str | None = None,
                 source: dict | None = None,
                 adapter_context: dict | None = None,
-                observable: dict | None = None) -> SnapshotRecord:
+                observable: dict | None = None,
+                state: MetaState | None = None,
+                record_id: int | None = None) -> SnapshotRecord:
         context = (self._adapter_context()
                    if adapter_context is None else dict(adapter_context))
         return SnapshotRecord(
@@ -232,7 +273,110 @@ class OptionContext:
             ),
             producer=producer,
             source=dict(source or {}),
+            state=state,
+            record_id=record_id,
         )
+
+    def _install_record(
+        self,
+        state: MetaState,
+        candidate: SnapshotRecord,
+        *,
+        arrival: dict,
+    ) -> SnapshotRecord:
+        record_id = self._next_record_id
+        self._next_record_id += 1
+        record = SnapshotRecord(
+            snapshot=candidate.snapshot,
+            digest=candidate.digest,
+            adapter_context=dict(candidate.adapter_context),
+            observable=dict(candidate.observable),
+            producer=candidate.producer,
+            source=dict(candidate.source),
+            state=state,
+            record_id=record_id,
+        )
+        self.physical_records[record_id] = record
+        self.record_ids_by_state.setdefault(state, []).append(record_id)
+        self.exact_record_index[(state, record.digest.full_sha256)] = record_id
+        self.record_arrivals[record_id] = [dict(arrival)]
+        # The old single-representative dictionaries remain read-compatible.
+        # They deliberately expose the first representative only.
+        if state not in self.snapshot_records:
+            self.snapshot_records[state] = record
+            self.snapshots[state] = record.snapshot
+        return record
+
+    def add_root(
+        self,
+        state: MetaState,
+        snapshot: Any,
+        *,
+        producer: str | None = "initial_context",
+        source: dict | None = None,
+        observable: dict | None = None,
+        adapter_context: dict | None = None,
+    ) -> int:
+        """Register an explicit physical root and return its in-run identity."""
+        candidate = self._record(
+            snapshot,
+            producer=producer,
+            source=source or {"kind": "declared_root"},
+            observable=observable,
+            adapter_context=adapter_context,
+            state=state,
+        )
+        duplicate = self.exact_record_index.get(
+            (state, candidate.digest.full_sha256)
+        )
+        arrival = {
+            "kind": "root",
+            "producer": producer,
+            "source": dict(source or {"kind": "declared_root"}),
+        }
+        if duplicate is not None:
+            self.record_arrivals[duplicate].append(arrival)
+            return duplicate
+        existing = self.record_ids_by_state.get(state, [])
+        if existing and self.alias_policy != "multi":
+            retained = self.physical_records[existing[0]]
+            collision = {
+                "state": state.to_json(),
+                "retained": retained.to_json(),
+                "rejected": candidate.to_json(),
+            }
+            self.alias_collisions.append(collision)
+            raise StateAliasError(collision)
+        record = self._install_record(state, candidate, arrival=arrival)
+        if existing:
+            self.alias_collisions.append({
+                "state": state.to_json(),
+                "retained": self.physical_records[existing[0]].to_json(),
+                "rejected": record.to_json(),
+                "resolution": "retained_both",
+                "representative_record_ids": [*existing, int(record.record_id)],
+            })
+        return int(record.record_id)
+
+    def record_ids_for(self, state: MetaState) -> tuple[int, ...]:
+        return tuple(self.record_ids_by_state.get(state, ()))
+
+    def _missing_restore(
+        self,
+        state: MetaState,
+        *,
+        record_id: int | None = None,
+        status: str = "missing",
+    ) -> bool:
+        event = {
+            "kind": "parent_restore",
+            "status": status,
+            "state": state.to_json(),
+            "physical_record_id": record_id,
+        }
+        self.restore_events.append(event)
+        self.last_restore_event = event
+        return False
 
     def _equivalence_signature(
             self, snapshot: Any,
@@ -254,18 +398,34 @@ class OptionContext:
                     self.executor.apply_snapshot_context(current_context)
         return None
 
-    def restore(self, state: MetaState) -> bool:
-        snap = self.snapshots.get(state)
-        record = self.snapshot_records.get(state)
-        if self.executor is None or snap is None or record is None:
-            event = {
-                "kind": "parent_restore",
-                "status": "missing",
-                "state": state.to_json(),
-            }
-            self.restore_events.append(event)
-            self.last_restore_event = event
-            return False
+    def restore_record(
+        self,
+        record_id: int | None,
+        *,
+        expected_state: MetaState,
+    ) -> bool:
+        """Restore one exact in-run representative.
+
+        Explicit ``None`` denotes a symbolic lineage.  It must never fall back
+        to an unrelated physical representative that happens to share the same
+        ``MetaState``.
+        """
+        if record_id is None:
+            return self._missing_restore(
+                expected_state, record_id=None, status="symbolic_parent"
+            )
+        record = self.physical_records.get(int(record_id))
+        if self.executor is None or record is None:
+            return self._missing_restore(
+                expected_state, record_id=int(record_id), status="missing"
+            )
+        if record.state != expected_state:
+            return self._missing_restore(
+                expected_state,
+                record_id=int(record_id),
+                status="record_state_mismatch",
+            )
+        snap = record.snapshot
         if hasattr(self.executor, "apply_snapshot_context"):
             self.executor.apply_snapshot_context(record.adapter_context)
         self.executor.restore(snap)
@@ -309,7 +469,8 @@ class OptionContext:
         event = {
             "kind": "parent_restore",
             "status": status,
-            "state": state.to_json(),
+            "state": expected_state.to_json(),
+            "physical_record_id": int(record_id),
             "expected": record.digest.to_json(),
             "actual": actual.digest.to_json(),
             "producer": record.producer,
@@ -335,6 +496,95 @@ class OptionContext:
             )
         return True
 
+    def restore(self, state: MetaState) -> bool:
+        """Legacy state-only restore.
+
+        Strict contexts retain the historical behavior.  Multi contexts require
+        an explicit record ID once a symbolic state has multiple physical
+        representatives; silently selecting the first would recreate the alias.
+        """
+        record_ids = self.record_ids_for(state)
+        if not record_ids:
+            return self._missing_restore(state)
+        if len(record_ids) > 1:
+            self._missing_restore(state, status="ambiguous_physical_parent")
+            raise RuntimeError(
+                "ambiguous physical parent: restore by physical record ID"
+            )
+        return self.restore_record(record_ids[0], expected_state=state)
+
+    def commit_transition(
+        self,
+        state: MetaState,
+        snapshot: Any,
+        *,
+        parent_record_id: int | None,
+        option_id: str,
+        observable: dict | None = None,
+        adapter_context: dict | None = None,
+        source: dict | None = None,
+    ) -> SnapshotCommit:
+        """Commit one accepted physical successor without collapsing aliases."""
+        if snapshot is None:
+            return SnapshotCommit("no_snapshot", None, None)
+        source_payload = dict(source or {
+            "kind": "option_exit",
+            "option": option_id,
+            "parent_record_id": parent_record_id,
+        })
+        candidate = self._record(
+            snapshot,
+            producer=option_id,
+            source=source_payload,
+            observable=observable,
+            adapter_context=adapter_context,
+            state=state,
+        )
+        arrival = {
+            "kind": "option_exit",
+            "option": option_id,
+            "parent_record_id": parent_record_id,
+            "source": source_payload,
+        }
+        duplicate = self.exact_record_index.get(
+            (state, candidate.digest.full_sha256)
+        )
+        if duplicate is not None:
+            self.record_arrivals[duplicate].append(arrival)
+            return SnapshotCommit(
+                "exact_duplicate",
+                duplicate,
+                self.physical_records[duplicate],
+            )
+
+        existing = list(self.record_ids_by_state.get(state, ()))
+        if existing and self.alias_policy != "multi":
+            collision = {
+                "state": state.to_json(),
+                "retained": self.physical_records[existing[0]].to_json(),
+                "rejected": candidate.to_json(),
+            }
+            self.alias_collisions.append(collision)
+            raise StateAliasError(collision)
+
+        record = self._install_record(state, candidate, arrival=arrival)
+        status = "stored"
+        if existing:
+            status = "retained_distinct_representative"
+            self.alias_collisions.append({
+                "state": state.to_json(),
+                "retained": self.physical_records[existing[0]].to_json(),
+                "rejected": record.to_json(),
+                "resolution": "retained_both",
+                "representative_record_ids": [
+                    *existing,
+                    int(record.record_id),
+                ],
+                "parent_record_id": parent_record_id,
+                "option": option_id,
+            })
+        return SnapshotCommit(status, int(record.record_id), record)
+
     def remember(self, state: MetaState, snapshot: Any, *,
                  producer: str | None = None,
                  source: dict | None = None,
@@ -350,16 +600,41 @@ class OptionContext:
             source=source or {"kind": "option_exit"},
             observable=observable,
             adapter_context=adapter_context,
+            state=state,
         )
         retained = self.snapshot_records.get(state)
         if retained is None:
-            self.snapshots[state] = snapshot
-            self.snapshot_records[state] = candidate
+            self._install_record(
+                state,
+                candidate,
+                arrival={
+                    "kind": "legacy_remember",
+                    "producer": producer,
+                    "source": dict(source or {"kind": "option_exit"}),
+                },
+            )
             return "stored"
         if retained.digest.full_sha256 == candidate.digest.full_sha256:
+            retained_id = int(retained.record_id)
+            self.record_arrivals[retained_id].append({
+                "kind": "legacy_remember",
+                "producer": producer,
+                "source": dict(source or {"kind": "option_exit"}),
+            })
             if replace_equivalent:
+                replacement = SnapshotRecord(
+                    snapshot=candidate.snapshot,
+                    digest=candidate.digest,
+                    adapter_context=dict(candidate.adapter_context),
+                    observable=dict(candidate.observable),
+                    producer=candidate.producer,
+                    source=dict(candidate.source),
+                    state=state,
+                    record_id=retained_id,
+                )
                 self.snapshots[state] = snapshot
-                self.snapshot_records[state] = candidate
+                self.snapshot_records[state] = replacement
+                self.physical_records[retained_id] = replacement
                 return "replaced_same"
             return "same"
         collision = {
@@ -374,6 +649,7 @@ class OptionContext:
 Precondition = Callable[[MetaState], bool]
 Runner = Callable[[MetaState, OptionContext], OptionResult]
 Verifier = Callable[[Any], bool]
+_UNSPECIFIED_RECORD_ID = object()
 
 
 class _SMA4ProvenanceMixin:
@@ -1249,6 +1525,91 @@ class SMA4WhistleExecutor(_SMA4ProvenanceMixin):
         samples.append(self.sample("after_second_whistle_settled", frames))
         return {"success": True, "cost_frames": frames, "samples": samples}
 
+    def _probe_cursor_responsiveness(
+            self, *, retained_frame: int | None = None) -> tuple[bool, int, list[dict]]:
+        """Falsify a stuck map against a matched NOOP control.
+
+        These frames are planner evaluation work, not option holding time.
+        The final rollback is attested through the same runtime provenance path
+        as other speculative checks.
+        """
+        snapshot = self.snapshot()
+        observable = self.snapshot_observable()
+        initial = (
+            self._read_u8(self.core.MAP_CURSOR_X),
+            self._read_u8(self.core.MAP_CURSOR_Y),
+        )
+        attempts: list[dict] = []
+        evaluation_frames = 0
+        responsive = False
+
+        def trace(buttons: tuple[str, ...]) -> list[list[int]]:
+            nonlocal evaluation_frames
+            samples = []
+            for _ in range(12):
+                self.core._step_buttons(buttons)
+                evaluation_frames += 1
+                samples.append([
+                    self._read_u8(self.core.MAP_CURSOR_X),
+                    self._read_u8(self.core.MAP_CURSOR_Y),
+                ])
+            for _ in range(6):
+                self.core._step_buttons(())
+                evaluation_frames += 1
+                samples.append([
+                    self._read_u8(self.core.MAP_CURSOR_X),
+                    self._read_u8(self.core.MAP_CURSOR_Y),
+                ])
+            return samples
+
+        try:
+            noop_trace = trace(())
+            attempts.append({
+                "direction": "NOOP_CONTROL",
+                "before": list(initial),
+                "after": noop_trace[-1],
+                "diverged_from_noop": False,
+                "trace_sha256": hashlib.sha256(
+                    stable_encode(noop_trace)).hexdigest(),
+            })
+            for direction in ("LEFT", "RIGHT", "UP", "DOWN"):
+                self._restore_runtime_snapshot(
+                    snapshot,
+                    reason="world8_cursor_probe_direction_reset",
+                    frame=retained_frame,
+                    expected_observable=observable,
+                )
+                direction_trace = trace((direction,))
+                diverged = direction_trace != noop_trace
+                attempts.append({
+                    "direction": direction,
+                    "before": list(initial),
+                    "after": direction_trace[-1],
+                    "diverged_from_noop": diverged,
+                    "trace_sha256": hashlib.sha256(
+                        stable_encode(direction_trace)).hexdigest(),
+                })
+                if diverged:
+                    responsive = True
+                    break
+        finally:
+            self._restore_runtime_snapshot(
+                snapshot,
+                reason="world8_cursor_probe_rollback",
+                frame=retained_frame,
+                expected_observable=observable,
+            )
+            self._trace_events.append({
+                "kind": "behavioral_probe",
+                "probe": "directional_map_cursor_responsiveness",
+                "knowledge_tier": int(KnowledgeTier.TIER0_GENERIC),
+                "result": bool(responsive),
+                "evaluation_frames": int(evaluation_frames),
+                "attempts": attempts,
+                "rolled_back": True,
+            })
+        return responsive, evaluation_frames, attempts
+
     def select_world8_pipe(self) -> dict:
         frames = 0
         samples = [self.sample("before_select_world8_pipe", frames)]
@@ -1261,11 +1622,48 @@ class SMA4WhistleExecutor(_SMA4ProvenanceMixin):
         frames += self._step(("A",), 12)
         frames += self._step((), 240)
         samples.append(self.sample("world8_map", frames))
+        cursor_responsive, evaluation_frames, probe_attempts = (
+            self._probe_cursor_responsiveness(retained_frame=frames)
+        )
+        samples.append(self.sample(
+            "world8_map_after_responsiveness_probe_rollback", frames))
         final = samples[-1]
+        whistle_count = sum(
+            1 for value in self.inventory() if value == self.WARP_WHISTLE
+        )
+        terminal_invariants = {
+            "raw_world_is_world8": (
+                final["world_raw_0_indexed"] == self.WORLD_8_RAW
+            ),
+            "mode_is_overworld": final.get("mode") == "overworld",
+            "whistle_inventory_empty": whistle_count == 0,
+            "cursor_responsive": bool(cursor_responsive),
+            "raw_world": final["world_raw_0_indexed"],
+            "mode": final.get("mode"),
+            "whistle_count": int(whistle_count),
+            "cursor": list(final.get("cursor") or ()),
+            "map_event": final.get("map_event"),
+            "item_menu_open": final.get("item_menu_open"),
+        }
+        accepted = all(
+            terminal_invariants[key]
+            for key in (
+                "raw_world_is_world8",
+                "mode_is_overworld",
+                "whistle_inventory_empty",
+                "cursor_responsive",
+            )
+        )
         return {
-            "success": final["world_raw_0_indexed"] == self.WORLD_8_RAW,
+            "success": bool(accepted),
             "cost_frames": frames,
+            "retained_cost_frames": frames,
+            "evaluation_frames": int(evaluation_frames),
             "samples": samples,
+            "world8_acceptance": bool(accepted),
+            "cursor_responsive": bool(cursor_responsive),
+            "terminal_invariants": terminal_invariants,
+            "cursor_probe_attempts": probe_attempts,
         }
 
 
@@ -1293,7 +1691,13 @@ class Option:
     def applicable(self, state: MetaState, *, max_tier: KnowledgeTier) -> bool:
         return self.knowledge_tier <= max_tier and self.precondition(state)
 
-    def execute(self, state: MetaState, context: OptionContext | None = None) -> OptionResult:
+    def execute(
+        self,
+        state: MetaState,
+        context: OptionContext | None = None,
+        *,
+        parent_record_id: int | None | object = _UNSPECIFIED_RECORD_ID,
+    ) -> OptionResult:
         context = context or OptionContext()
         physical = self.requires_snapshot and context.executor is not None
         symbolic_manifest_only = (
@@ -1302,8 +1706,17 @@ class Option:
         restore_event = None
         entry_digest = None
         entry_observable = None
+        entry_record_id = None
         if physical:
-            if not context.restore(state):
+            if parent_record_id is _UNSPECIFIED_RECORD_ID:
+                restored = context.restore(state)
+            else:
+                restored = context.restore_record(
+                    parent_record_id
+                    if isinstance(parent_record_id, int) else None,
+                    expected_state=state,
+                )
+            if not restored:
                 restore_event = context.last_restore_event
                 boundary = {
                     "option": self.id,
@@ -1311,6 +1724,11 @@ class Option:
                     "to": state.to_json(),
                     "status": "missing_parent_snapshot",
                     "restore": restore_event,
+                    "entry_record_id": (
+                        restore_event.get("physical_record_id")
+                        if restore_event is not None else None
+                    ),
+                    "exit_record_id": None,
                     "raw_hash_continuous": False,
                     "composition_attested": False,
                 }
@@ -1322,8 +1740,13 @@ class Option:
                         "boundary": boundary,
                     },
                     boundary=boundary,
+                    entry_record_id=boundary["entry_record_id"],
                 )
             restore_event = context.last_restore_event
+            entry_record_id = (
+                restore_event.get("physical_record_id")
+                if restore_event is not None else None
+            )
             runtime_entry = context.executor.snapshot()
             entry_digest = context.digest(runtime_entry).to_json()
             entry_observable = context.observable()
@@ -1392,6 +1815,8 @@ class Option:
                 "to": result.state.to_json(),
                 "status": "success" if result.success else "failed",
                 "restore": restore_event,
+                "entry_record_id": entry_record_id,
+                "exit_record_id": None,
                 "entry": entry_digest,
                 "entry_observable": entry_observable,
                 "exit": exit_digest,
@@ -1426,6 +1851,7 @@ class Option:
             result.exit_observable = exit_observable
             result.exit_adapter_context = exit_adapter_context
             result.boundary = boundary
+            result.entry_record_id = entry_record_id
         return result
 
     def verify(self, executor: Any = None) -> bool:
@@ -1489,6 +1915,14 @@ class MetaSearchResult:
     alias_collisions: list[dict] = field(default_factory=list)
     visited: int = 0
     log: list[dict] = field(default_factory=list)
+    physical_record_ids: list[int | None] = field(default_factory=list)
+    physical_visited: int = 0
+    search_nodes_visited: int = 0
+    representative_registry: list[dict] = field(default_factory=list)
+    transition_observations: list[dict] = field(default_factory=list)
+    partition_refinement: dict = field(default_factory=dict)
+    repeat_conformance_failures: list[dict] = field(default_factory=list)
+    evaluation_work: dict = field(default_factory=dict)
 
     def to_json(self) -> dict:
         return {
@@ -1506,6 +1940,14 @@ class MetaSearchResult:
             "alias_collisions": self.alias_collisions,
             "visited": self.visited,
             "log": self.log,
+            "physical_record_ids": list(self.physical_record_ids),
+            "physical_visited": self.physical_visited,
+            "search_nodes_visited": self.search_nodes_visited,
+            "representative_registry": self.representative_registry,
+            "transition_observations": self.transition_observations,
+            "partition_refinement": self.partition_refinement,
+            "repeat_conformance_failures": self.repeat_conformance_failures,
+            "evaluation_work": self.evaluation_work,
         }
 
 
@@ -1513,7 +1955,7 @@ def _transition_evidence(option: Option, result: OptionResult) -> dict:
     mode = result.info.get("execution_mode")
     if mode is None:
         mode = "physical_executor" if result.boundary is not None else "symbolic_model"
-    return {
+    evidence = {
         "option": option.id,
         "execution_mode": mode,
         "physical_boundary_evidence": result.boundary is not None,
@@ -1522,6 +1964,10 @@ def _transition_evidence(option: Option, result: OptionResult) -> dict:
             if result.boundary is not None else None
         ),
     }
+    if result.entry_record_id is not None or result.exit_record_id is not None:
+        evidence["entry_record_id"] = result.entry_record_id
+        evidence["exit_record_id"] = result.exit_record_id
+    return evidence
 
 
 def search_options(library: OptionLibrary, start: MetaState,

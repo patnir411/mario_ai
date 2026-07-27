@@ -13,7 +13,8 @@ claim. Breadth and understanding over peak performance.
 This document is the map. Each module below doubles as a learning unit: it states *what* it is, *why* it exists, the *theory* behind it, the *interface*, and the *failure modes* to watch.
 
 Date: 2026-06-03.
-Updated: 2026-07-25 after the repository-wide evidence and architecture audit.
+Updated: 2026-07-27 after physical-representative search and finite option
+refinement.
 
 ---
 
@@ -54,6 +55,19 @@ NES / GB / GBA emulator
   local and lack a clean-clone training-provenance chain.
 - The SMA4 whistle/World-8 route is a segmented mixed emulator/symbolic benchmark with declared
   state and inventory interventions. It is not evidence of a continuous full-ROM route.
+
+**Implementation delta, 2026-07-27 (literature cutoff remains July 25):**
+
+- Opt-in SMA4 BFS/UCS now key search by `(MetaState, physical_record_id)` and
+  preserve both whistle-acquisition histories. Strict legacy callers still fail
+  closed on physical aliases.
+- A complete finite-library report repeats enabled transitions, compares
+  normalized outcomes plus finite physical-exit attestations, recursively
+  refines successor blocks, and returns distinguishing option suffixes.
+- In the current Tier-3 run, both orders reach the World-8 selection test. Only
+  1-3-then-fortress produces an input-responsive World-8 cursor; the reverse
+  order is retained as a distinct failure. This is a new diagnosis, not a
+  continuous-route or speedup result.
 
 ---
 
@@ -370,24 +384,43 @@ At the route layer:
 1. `MetaState` compresses world/map position, clears, inventory, and flags.
 2. An `Option` declares an initiation test, executor, termination result, and measured/symbolic
    cost.
-3. `OptionContext` currently maps symbolic states to one emulator snapshot while recording exact
-   byte-backed state/context hashes, observable RAM/display hashes, producer/root provenance, and
-   restore attestations.
-4. greedy, breadth/uniform-cost, and execute-to-observe planners compose available options.
+3. `OptionContext` has two explicit contracts:
+   - strict compatibility mode maps a symbolic state to one snapshot and raises
+     `StateAliasError` on a raw-distinct candidate;
+   - opt-in multi mode retains immutable in-run physical records, exact-record
+     deduplication, all arrivals, observable/context evidence, and explicit
+     record restoration.
+4. A symbolic transition deliberately drops physical identity. A later
+   physical option fails closed rather than borrowing the first snapshot with a
+   matching `MetaState`.
+5. legacy greedy/BFS/UCS remain available; opt-in physical BFS/UCS key frontier
+   and dominance by `(MetaState, physical_record_id)`. Bounded UCS uses
+   nondominated `(cost, depth)` labels.
+6. post-run refinement builds a finite option table, repeats enabled
+   transitions, checks normalized behavior plus finite physical-exit evidence,
+   propagates successor blocks to a fixed point, and emits content-addressed
+   classes and distinguishing option suffixes.
 
 The SMA4 implementation has real level/overworld executors and replayable 1-1/1-2 segments.
 One declared 1-2 root now reaches the real unpowered fortress through live
 `DOWN,DOWN,LEFT -> (96,96)` input with zero direct RAM writes. The whistle route still restores
 independent power-state roots and applies inventory/power/cursor interventions.
 
-The boundary audit also produced a concrete abstraction counterexample: opposite
-whistle-acquisition orders reach one `MetaState` with different physical emulator/RAM states.
-`OptionContext` now fails closed with `StateAliasError` instead of silently retaining the first
-representative. Search still uses `MetaState` as its frontier key, so the next architecture must
-retain multiple physical representatives and partition-refine them by complete deterministic
-option signatures. Until that passes and the live unpowered entry receives legitimate power, call
-this a **segmented option-planning prototype**. Report ROM frames, symbolic endpoint costs,
-attempted versus selected interventions, and physical versus symbolic path evidence separately.
+The boundary audit's abstraction counterexample is now preserved rather than
+route-destructive. Both acquisition orders survive through the second whistle.
+The finite option table distinguishes their first-whistle states with
+`use_whistle_again` and their second-whistle states with
+`select_world8_pipe`. Only the 1-3-then-fortress order yields an
+input-responsive World-8 map under the current Tier-3 implementation.
+
+Refinement currently reports classes; it does **not** merge the live frontier.
+All 12 classes in the current run are singletons. Completeness and closure mean
+only the encountered records, finite option implementation, ROM/core, tier, and
+depth. They are not global bisimulation or determinism proofs. Until the Tier-3
+cursor repair is removed and the live unpowered entry receives legitimate
+power, call this a **segmented option-planning prototype**. Report retained ROM
+frames, rolled-back evaluation work, symbolic endpoint costs, attempted versus
+selected interventions, and physical versus symbolic path evidence separately.
 
 ---
 
@@ -408,7 +441,8 @@ mario_ai/
     entity_policy.py         # entity/temporal models and search priors
     consistency.py           # input perturbation consistency (not Stable-BC)
     provenance.py            # deterministic state/artifact hashes and alias errors
-    options.py               # option contracts, executors, BFS
+    options.py               # option contracts, executors, strict context/BFS
+    physical_planner.py      # multi-record BFS/UCS + finite partition refinement
     meta_planner.py          # greedy/uniform-cost SMA4 planning experiments
   scripts/
     solve_all_stock.py
@@ -439,11 +473,16 @@ The original V0–V5 sequence is preserved as project history:
 Current evidence gates, in order:
 
 1. Keep code/docs/manifests clean-clone coherent and replay-gate all stock claims.
-2. Preserve multiple physical SMA4 representatives and partition-refine by option signatures.
-3. Supply fortress power legitimately from the live lineage; remove or tier remaining interventions.
-4. Replace symbolic SMA4 endpoints and add matched unknown-effect baselines.
-5. Re-solve 6-3; instrument moving-platform phase and variable action durations for 6-2.
-6. Test learned priors across levels without reducing solve rate.
+2. Diff the two second-whistle lineages, find an input-only
+   distinguishing/repair suffix, remove the Tier-3 cursor writes, and pass the
+   viable route at maximum Tier 2.
+3. Supply fortress power legitimately from the live lineage and eliminate
+   independent acquisition roots from the accepted route.
+4. Construct one continuous physical two-whistle lineage.
+5. Replace symbolic SMA4 endpoints and add matched unknown-effect/effect-cache
+   baselines under a vector cost contract.
+6. Re-solve 6-3; instrument moving-platform phase and variable action durations for 6-2.
+7. Test learned priors across levels without reducing solve rate.
 
 ---
 
@@ -454,6 +493,11 @@ Current evidence gates, in order:
 - Can PHS/PHS* or Levin-style guidance retain completeness while capturing the local prior gain?
 - Which distinctions belong in `MetaState`, and which should remain explicit physical/history
   representatives, so equal abstract states have equal option outcome/cost signatures?
+- Can active counterexample suffixes and held-out tests safely justify any
+  online refined-class merge, or should physical identity remain the permanent
+  frontier key?
+- Which RAM/context/input-history feature predicts the current
+  acquisition-order cursor-responsiveness split across new roots?
 - Does unknown-option planning still beat greedy after both receive the same learned/cached effect
   model and cost definition?
 
@@ -477,6 +521,16 @@ Current evidence gates, in order:
 - Ravindran and Barto, *SMDP Homomorphisms* (IJCAI 2003), and Castro and Precup,
   *Using Bisimulation for Policy Transfer in MDPs* (AAAI 2010) — direct mathematics for testing
   whether physical states may safely share an option-level abstraction.
+- Givan, Dean, and Greig, *Equivalence Notions and Model Minimization in MDPs*
+  (AIJ 2003), and Castro, Panangaden, and Precup, *Equivalence Relations in
+  Fully and Partially Observable MDPs* (IJCAI 2009) — recursive
+  successor-block refinement and the limits of finite traces.
+- Ahmetoglu et al., *Skill-Driven Neurosymbolic State Abstractions* (NeurIPS
+  2025) — construct state around the supplied option set.
+- Angluin, *Learning Regular Sets from Queries and Counterexamples* (1987),
+  Wißmann et al., *Explaining Behavioural Inequivalence* (CONCUR 2021), and
+  Giraud et al., *L-SCALE* (AST 2026) — active distinguishing suffixes over a
+  resettable system; approximate hashing is not a safety gate here.
 - Bai, Srivastava, and Russell, *Markovian State and Action Abstractions for MDPs via Hierarchical
   MCTS* (IJCAI 2016) — history/representative planning when abstraction induces non-Markov state.
 - Data Crystal — *Super Mario Bros. RAM map*.
