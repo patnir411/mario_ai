@@ -2,6 +2,39 @@
 
 Newest first. Detailed notes live under `notes/sessions/`.
 
+## 2026-07-27 — SMA4 live cursor pointer + Tier-2 correction
+
+Detailed note:
+`notes/sessions/2026-07-27-sma4-live-cursor-pointer-tier2.md`
+
+Summary:
+- Re-derived the map cursor from live RAM rather than treating
+  `0x03003DE0/0x03003DE4` as universal. Pointer `0x03007824` selects the active
+  cursor object; the 1-3 exit can relocate it from `0x03003DE0` to
+  `0x03004EF8`, leaving the old pair stale at `(14,135)`.
+- Removed all Tier-3 cursor synchronization. Null or unknown live-map pointers
+  are labeled unresolved and option boundaries fail closed; cursor pointer,
+  source, legacy pair, and resolution status are carried through reports.
+- Both whistle-acquisition orders now traverse exact cells
+  `(64,80) -> (128,144) -> (32,80)` and pass the matched `DOWN`/NOOP World-8
+  responsiveness probe with zero cursor writes.
+- Dirty-tree normal/reverse diagnostics agree: BFS finds the mixed goal in
+  13,266 frames, UCS in 13,194, maximum effective Tier 2, 14 branches/28
+  repeated executions, and no repeat-conformance failures. The last 6,000
+  frames remain a symbolic Bowser edge; greedy remains stuck, so no speedup
+  ratio is claimed.
+- Verification: 44 focused pointer/option/planner tests, 171 full-suite tests
+  with ten expected skips, seven ROM-backed SMA4 tests, compilation/diff
+  checks, and the 30/32 stock replay gate pass. Clean-source normal/reverse
+  benchmark attestations are the post-commit gate.
+- The route is still segmented: two independent power-state roots, one
+  inventory-merge write, one fortress leaf-rehold write, and the symbolic
+  endpoint remain. The corrected next gate is a one-root, legitimate-power,
+  write-free continuous physical lineage.
+- Added the July 25-cutoff research bridge to skill-induced symbols,
+  self-predictive representations, causal/approximate abstraction,
+  provenance, reproducibility, and counterexample minimization.
+
 ## 2026-07-27 — SMA4 physical representatives + finite refinement
 
 Detailed note:
@@ -19,7 +52,7 @@ Summary:
   find the same 13,320-frame mixed path; both acquisition orders reach the
   World-8 selection test, but only 1-3-then-fortress yields an
   input-responsive cursor. The reverse order reaches raw World 8 with zero
-  whistles but remains stuck.
+  whistles but appears stuck under the then-current fixed-address observer.
 - The 12-record, finite-library table is complete, repeated twice per enabled
   option, conflict-free, and closed under modeled physical successors. All
   classes are singletons; this is empirical finite conformance, not global
@@ -33,7 +66,8 @@ Summary:
   note.
 - Next: diff the two second-whistle lineages, generate an input-only
   distinguishing/repair suffix, remove the Tier-3 cursor writes, and rerun at
-  maximum Tier 2.
+  maximum Tier 2. **Superseded by the entry above:** the split was a
+  fixed-address decoder bug, and both histories pass without a repair suffix.
 
 ## 2026-07-26 — SMA4 boundary integrity + live fortress entry
 

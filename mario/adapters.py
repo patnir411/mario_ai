@@ -314,9 +314,15 @@ class SMA4Adapter:
     GOAL_CARD = 0x03004733
 
     # Overworld map state (reverse-engineered via scripts/probe_overworld.py).
-    # Cursor coordinates live on a 0x20-pixel grid; world is 0-indexed.
+    #
+    # MAP_CURSOR_PTR is the live cursor-object base pointer.  Y is at base+0 and
+    # X at base+4.  Normal map entries point at MAP_CURSOR_Y/X; the 1-3
+    # Toad-house exit relocates the object, leaving those legacy addresses stale.
+    # Do not write the legacy pair to "repair" a transition: follow the pointer.
+    MAP_CURSOR_PTR = 0x03007824
     MAP_CURSOR_X = 0x03003DE4
     MAP_CURSOR_Y = 0x03003DE0
+    MAP_CURSOR_BASES = frozenset((0x03003DE0, 0x03004EF8))
     PROGRESS = 0x03002C52  # per-world clear progress; flips on level completion
     ITEM_MENU_OPEN = 0x03003772
     MAP_EVENT = 0x03003774  # 0x11 on the live overworld, including stale-cursor exits
@@ -454,9 +460,8 @@ class SMA4Adapter:
             return "level"
         if item_menu_open:
             return "menu"
-        # Some verified Toad-house exits leave MAP_CURSOR_* off-grid even though
-        # the live World-1 map is already visible. MAP_EVENT=0x11 distinguishes
-        # that overworld state from title/file-select menus.
+        # MAP_EVENT=0x11 is direct live-map evidence even while the pointer-
+        # resolved cursor is moving between grid cells.
         if map_event == 0x11 and (cx or cy):
             return "overworld"
         if world_raw in (7, 8) and (cx or cy):
@@ -465,15 +470,97 @@ class SMA4Adapter:
             return "overworld"
         return "menu"
 
+    @classmethod
+    def _pointer_in_iwram(cls, pointer: int) -> bool:
+        """Return whether an aligned 8-byte struct fits inside GBA IWRAM."""
+        pointer = int(pointer)
+        return (
+            pointer % 4 == 0
+            and cls._IWRAM <= pointer
+            and pointer + 7 < cls._IWRAM + 0x8000
+        )
+
+    @staticmethod
+    def _map_cursor_context(*, time: int, world_raw: int,
+                            map_event: int) -> bool:
+        """Whether cursor-pointer bytes currently describe an overworld map."""
+        return (
+            int(time) == 0
+            and (int(map_event) in (0x0A, 0x0F, 0x11)
+                 or int(world_raw) in (7, 8))
+        )
+
+    def _resolve_map_cursor(self, *, time: int, world_raw: int,
+                            map_event: int) -> dict:
+        legacy = (
+            self._read_u8(self.MAP_CURSOR_X),
+            self._read_u8(self.MAP_CURSOR_Y),
+        )
+        raw_pointer = self._read_u32(self.MAP_CURSOR_PTR)
+        resolved_pointer: int | None = None
+        source = "legacy_fallback"
+        cursor = legacy
+        live_map = self._map_cursor_context(
+            time=time, world_raw=world_raw, map_event=map_event)
+        if live_map:
+            if (self._pointer_in_iwram(raw_pointer)
+                    and raw_pointer in self.MAP_CURSOR_BASES):
+                resolved_pointer = raw_pointer
+                source = "pointer"
+            elif raw_pointer == 0:
+                # Observed for one frame during warp-zone -> World 8.  Returning
+                # an explicitly unresolved coordinate is safer than splicing in
+                # a pointer cached from another restored lineage.
+                cursor = (0, 0)
+                source = "transient_null_pointer"
+            else:
+                cursor = (0, 0)
+                source = "unrecognized_pointer"
+        if resolved_pointer is not None:
+            cursor = (
+                self._read_u8(resolved_pointer + 4),
+                self._read_u8(resolved_pointer),
+            )
+        return {
+            "resolver": "sma4_cursor_pointer_v1",
+            "cursor": cursor,
+            "source": source,
+            "raw_pointer": raw_pointer,
+            "resolved_pointer": resolved_pointer,
+            "pointer_in_iwram": self._pointer_in_iwram(raw_pointer),
+            "pointer_recognized": raw_pointer in self.MAP_CURSOR_BASES,
+            "resolved": resolved_pointer is not None,
+            "legacy": legacy,
+        }
+
+    def map_cursor_info(self) -> dict:
+        """Read the live cursor and its pointer provenance atomically."""
+        return self._resolve_map_cursor(
+            # TIME is a three-byte big-endian integration field; use the
+            # normalized value rather than reading a fourth adjacent byte.
+            time=int(self._last_info.get("time", 0)),
+            world_raw=self._read_u8(self.WORLD),
+            map_event=self._read_u8(self.MAP_EVENT),
+        )
+
+    def map_cursor(self) -> tuple[int, int]:
+        """Read X/Y from the live cursor object, with a labeled fallback."""
+        return tuple(self.map_cursor_info()["cursor"])
+
     def _normalize_info(self, base_info: dict | None = None) -> dict:
         base_info = dict(base_info or {})
         x_fixed = self._read_u32(self.PLAYER_X_FIXED)
         y_fixed = self._read_u32(self.PLAYER_Y_FIXED)
         time = int(base_info.get("time", self._read_u32(self.TIME)))
-        cx, cy = self._read_u8(self.MAP_CURSOR_X), self._read_u8(self.MAP_CURSOR_Y)
         world_raw = int(self._read_u8(self.WORLD))
         item_menu_open = int(self._read_u8(self.ITEM_MENU_OPEN))
         map_event = int(self._read_u8(self.MAP_EVENT))
+        cursor_info = self._resolve_map_cursor(
+            time=time,
+            world_raw=world_raw,
+            map_event=map_event,
+        )
+        cx, cy = cursor_info["cursor"]
         return {
             "game_id": self.game_id,
             "level_id": self.level_id,
@@ -494,6 +581,11 @@ class SMA4Adapter:
                 time, cx, cy, world_raw=world_raw,
                 item_menu_open=item_menu_open, map_event=map_event),
             "cursor": (cx, cy),
+            "cursor_source": cursor_info["source"],
+            "cursor_pointer": cursor_info["raw_pointer"],
+            "cursor_resolved_pointer": cursor_info["resolved_pointer"],
+            "cursor_resolved": cursor_info["resolved"],
+            "cursor_legacy": cursor_info["legacy"],
             "cleared": int(self._read_u8(self.PROGRESS)),
             "item_menu_open": item_menu_open,
             "map_event": map_event,

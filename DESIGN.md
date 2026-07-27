@@ -13,8 +13,8 @@ claim. Breadth and understanding over peak performance.
 This document is the map. Each module below doubles as a learning unit: it states *what* it is, *why* it exists, the *theory* behind it, the *interface*, and the *failure modes* to watch.
 
 Date: 2026-06-03.
-Updated: 2026-07-27 after physical-representative search and finite option
-refinement.
+Updated: 2026-07-27 after physical-representative search, finite option
+refinement, and the live SMA4 cursor-pointer correction.
 
 ---
 
@@ -64,10 +64,13 @@ NES / GB / GBA emulator
 - A complete finite-library report repeats enabled transitions, compares
   normalized outcomes plus finite physical-exit attestations, recursively
   refines successor blocks, and returns distinguishing option suffixes.
-- In the current Tier-3 run, both orders reach the World-8 selection test. Only
-  1-3-then-fortress produces an input-responsive World-8 cursor; the reverse
-  order is retained as a distinct failure. This is a new diagnosis, not a
-  continuous-route or speedup result.
+- The formerly fixed SMA4 cursor pair can name an abandoned object after the
+  1-3 exit. Following the live pointer at `0x03007824` makes both acquisition
+  histories input-responsive and removes all cursor repair writes. Normal and
+  reverse insertion diagnostics both pass the mixed route at maximum Tier 2.
+- This is still a segmented result, not a continuous route or a speedup:
+  independent power-state roots, inventory/leaf writes, and a symbolic Bowser
+  edge remain, while greedy is intentionally nonexploring and finds no goal.
 
 ---
 
@@ -404,22 +407,27 @@ At the route layer:
 The SMA4 implementation has real level/overworld executors and replayable 1-1/1-2 segments.
 One declared 1-2 root now reaches the real unpowered fortress through live
 `DOWN,DOWN,LEFT -> (96,96)` input with zero direct RAM writes. The whistle route still restores
-independent power-state roots and applies inventory/power/cursor interventions.
+independent power-state roots and applies an inventory merge plus a fortress
+leaf rehold. No cursor intervention remains.
 
 The boundary audit's abstraction counterexample is now preserved rather than
 route-destructive. Both acquisition orders survive through the second whistle.
-The finite option table distinguishes their first-whistle states with
-`use_whistle_again` and their second-whistle states with
-`select_world8_pipe`. Only the 1-3-then-fortress order yields an
-input-responsive World-8 map under the current Tier-3 implementation.
+The finite option table originally appeared to distinguish their first- and
+second-whistle states, but this was a decoder artifact: the 1-3 exit relocates
+the live cursor object from `0x03003DE0` to `0x03004EF8`, while the old fixed
+pair stays stale. Pointer-resolved observations make both histories agree on
+reachability and pass the matched `DOWN`/NOOP World-8 responsiveness test.
+Their post-first-whistle records remain cost-distinct (1,302 versus 1,290
+frames for the second spend), while the post-second-whistle and World-8 record
+pairs share finite refined blocks.
 
 Refinement currently reports classes; it does **not** merge the live frontier.
-All 12 classes in the current run are singletons. Completeness and closure mean
-only the encountered records, finite option implementation, ROM/core, tier, and
-depth. They are not global bisimulation or determinism proofs. Until the Tier-3
-cursor repair is removed and the live unpowered entry receives legitimate
-power, call this a **segmented option-planning prototype**. Report retained ROM
-frames, rolled-back evaluation work, symbolic endpoint costs, attempted versus
+Completeness and closure mean only the encountered records, finite option
+implementation, ROM/core, tier, and depth. They are not global bisimulation or
+determinism proofs. Until the live unpowered entry receives legitimate power
+and both acquisitions share one uninterrupted lineage, call this a
+**segmented option-planning prototype**. Report retained ROM frames,
+rolled-back evaluation work, symbolic endpoint costs, attempted versus
 selected interventions, and physical versus symbolic path evidence separately.
 
 ---
@@ -472,14 +480,14 @@ The original V0–V5 sequence is preserved as project history:
 
 Current evidence gates, in order:
 
-1. Keep code/docs/manifests clean-clone coherent and replay-gate all stock claims.
-2. Diff the two second-whistle lineages, find an input-only
-   distinguishing/repair suffix, remove the Tier-3 cursor writes, and pass the
-   viable route at maximum Tier 2.
-3. Supply fortress power legitimately from the live lineage and eliminate
-   independent acquisition roots from the accepted route.
-4. Construct one continuous physical two-whistle lineage.
-5. Replace symbolic SMA4 endpoints and add matched unknown-effect/effect-cache
+1. Close the live-cursor correction with clean-source normal/reverse Tier-2
+   reports, full tests, and replay gates.
+2. Supply power legitimately from one live World-1 lineage; remove the second
+   acquisition root, inventory merge, and fortress leaf rehold.
+3. Construct and independently replay one continuous, write-free physical
+   two-whistle lineage.
+4. Replace symbolic SMA4 World-8/Bowser endpoints.
+5. Add matched unknown-effect/effect-cache
    baselines under a vector cost contract.
 6. Re-solve 6-3; instrument moving-platform phase and variable action durations for 6-2.
 7. Test learned priors across levels without reducing solve rate.
@@ -496,8 +504,11 @@ Current evidence gates, in order:
 - Can active counterexample suffixes and held-out tests safely justify any
   online refined-class merge, or should physical identity remain the permanent
   frontier key?
-- Which RAM/context/input-history feature predicts the current
-  acquisition-order cursor-responsiveness split across new roots?
+- Which legitimate World-1 item/power route gives one continuous lineage
+  through both whistle acquisitions without an external restore or write?
+- Which additional cursor-object bases, if any, appear on new roots, and can
+  the adapter recognize them from structure rather than a growing allowlist
+  without weakening the fail-closed boundary?
 - Does unknown-option planning still beat greedy after both receive the same learned/cached effect
   model and cost definition?
 
@@ -527,6 +538,14 @@ Current evidence gates, in order:
   successor-block refinement and the limits of finite traces.
 - Ahmetoglu et al., *Skill-Driven Neurosymbolic State Abstractions* (NeurIPS
   2025) — construct state around the supplied option set.
+- Konidaris, Kaelbling, and Lozano-Pérez, *From Skills to Symbols* (JAIR
+  2018), Ni et al., *Bridging State and History Representations* (ICLR 2024),
+  and Xia and Bareinboim, *Causal Abstraction Inference under Lossy
+  Representations* (ICML 2025) — option-induced, predictive, and
+  multiple-realization views of the corrected cursor abstraction.
+- Abel et al., *Near Optimal Behavior via Approximate State Abstraction*
+  (ICML 2016) — approximate merging only after exact finite signatures and a
+  declared error budget.
 - Angluin, *Learning Regular Sets from Queries and Counterexamples* (1987),
   Wißmann et al., *Explaining Behavioural Inequivalence* (CONCUR 2021), and
   Giraud et al., *L-SCALE* (AST 2026) — active distinguishing suffixes over a

@@ -6,6 +6,10 @@
 > **Operating rule (from the adversarial + Gita pass):** do the prescribed
 > ROM-complete work; renounce proxy fruit (bench green, poetic isomorphisms,
 > “meta-intelligence”); do not call an unfinished honesty ladder a theorem.
+>
+> **Correction, 2026-07-27:** the `MAP_CURSOR` sync debt below was an observer
+> bug, not a required game-state repair. The live cursor pointer now removes it;
+> see `2026-07-27-sma4-live-cursor-pointer-tier2.md`.
 
 ---
 

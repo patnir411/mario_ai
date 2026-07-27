@@ -1,5 +1,10 @@
 # 2026-07-15 — Tier-2 `AcquireWhistle_1_3` (white-block → Toad chest)
 
+> **Correction, 2026-07-27:** the exit relocates the live cursor object; it
+> does not leave the logical cursor broken. The fixed-address synchronization
+> assist described below is superseded and removed. See
+> `2026-07-27-sma4-live-cursor-pointer-tier2.md`.
+
 ## Goal
 Replace the Tier-1 hand-grant for the **first** warp whistle with a replay-verified
 Tier-2 option from SMA4 1-3 (white-block duck → behind scenery → secret Toad house).

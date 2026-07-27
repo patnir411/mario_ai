@@ -3,6 +3,13 @@
 > Evidence-first follow-up to the July 25 project audit. The requested research
 > date was July 25, 2026; execution continued into July 26 in America/Detroit.
 > This note records observations before interpretation and planning.
+>
+> **Correction, 2026-07-27:** the Tier-3 cursor repair and unresponsive reverse
+> lineage recorded here were consequences of reading a fixed, abandoned cursor
+> object. Following the live pointer removes the repair and makes both orders
+> responsive at maximum Tier 2. See
+> `2026-07-27-sma4-live-cursor-pointer-tier2.md`. The boundary-provenance and
+> live-fortress findings remain valid.
 
 ## 1. Questions tested
 

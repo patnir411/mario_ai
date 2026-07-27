@@ -1086,17 +1086,66 @@ class SMA4WhistleExecutor(_SMA4ProvenanceMixin):
         return [self._read_u8(self.INVENTORY_START + i)
                 for i in range(self.INVENTORY_SLOTS)]
 
+    def _cursor_info(self) -> dict:
+        """Return one atomic adapter-resolved cursor observation."""
+        if hasattr(self.core, "map_cursor_info"):
+            return dict(self.core.map_cursor_info())
+        cursor = self.core.last_info.get("cursor")
+        if cursor is None:
+            cursor = (
+                self._read_u8(self.core.MAP_CURSOR_X),
+                self._read_u8(self.core.MAP_CURSOR_Y),
+            )
+        return {
+            "cursor": (int(cursor[0]), int(cursor[1])),
+            "source": self.core.last_info.get(
+                "cursor_source", "legacy_or_fake"),
+            "raw_pointer": self.core.last_info.get("cursor_pointer"),
+            "resolved_pointer": self.core.last_info.get(
+                "cursor_resolved_pointer"),
+            "pointer_in_iwram": None,
+            "pointer_recognized": None,
+            "resolved": bool(self.core.last_info.get(
+                "cursor_resolved", True)),
+            "resolver": "fake_or_legacy_cursor_v1",
+            "legacy": tuple(self.core.last_info.get(
+                "cursor_legacy", cursor)),
+        }
+
+    def _cursor_resolved(self, cursor_info: dict | None = None) -> bool:
+        cursor_info = cursor_info or self._cursor_info()
+        return bool(cursor_info.get("resolved", True))
+
+    def _cursor(self) -> tuple[int, int]:
+        """Return the adapter-resolved logical map cursor."""
+        cursor = self._cursor_info()["cursor"]
+        return int(cursor[0]), int(cursor[1])
+
+    def _cursor_matches(self, expected: tuple[int, int]) -> bool:
+        cursor_info = self._cursor_info()
+        return (
+            self._cursor_resolved(cursor_info)
+            and tuple(cursor_info["cursor"]) == tuple(expected)
+        )
+
     def sample(self, label: str, frame: int = 0) -> dict:
+        cursor_info = self._cursor_info()
+        cursor = cursor_info["cursor"]
         return {
             "label": label,
             "frame": int(frame),
             "world_raw_0_indexed": self._read_u8(self.core.WORLD),
             "world_normalized": int(self.core.last_info.get("world", 0)),
             "is_warp_zone": bool(self.core.last_info.get("is_warp_zone", False)),
-            "cursor": [
-                self._read_u8(self.core.MAP_CURSOR_X),
-                self._read_u8(self.core.MAP_CURSOR_Y),
-            ],
+            "cursor": list(cursor),
+            "cursor_source": cursor_info["source"],
+            "cursor_pointer": cursor_info["raw_pointer"],
+            "cursor_resolved_pointer": cursor_info["resolved_pointer"],
+            "cursor_pointer_in_iwram": cursor_info.get("pointer_in_iwram"),
+            "cursor_pointer_recognized": cursor_info.get("pointer_recognized"),
+            "cursor_resolved": self._cursor_resolved(cursor_info),
+            "cursor_resolver": cursor_info.get("resolver"),
+            "cursor_legacy": list(cursor_info["legacy"]),
             "mode": self.core.last_info.get("mode"),
             "panel_slots_raw": int(self.core.last_info.get("cleared", 0)),
             "time": int(self.core.last_info.get("time", 0)),
@@ -1109,19 +1158,23 @@ class SMA4WhistleExecutor(_SMA4ProvenanceMixin):
     def decode_meta_state(self) -> dict:
         raw_world = self._read_u8(self.core.WORLD)
         inventory = self.inventory()
+        cursor_info = self._cursor_info()
+        cursor = cursor_info["cursor"]
         return {
             "world": 9 if raw_world == self.WARP_ZONE_WORLD_RAW
             else raw_world + 1,
-            "node": [
-                self._read_u8(self.core.MAP_CURSOR_X),
-                self._read_u8(self.core.MAP_CURSOR_Y),
-            ],
+            "node": list(cursor),
             "panel_slots_raw": int(self.core.last_info.get("cleared", 0)),
             "inventory": sorted(
                 "whistle" for value in inventory if value == self.WARP_WHISTLE
             ),
             "mode": self.core.last_info.get("mode"),
             "raw_world": raw_world,
+            "cursor_source": cursor_info["source"],
+            "cursor_pointer": cursor_info["raw_pointer"],
+            "cursor_resolved_pointer": cursor_info["resolved_pointer"],
+            "cursor_legacy": list(cursor_info["legacy"]),
+            "cursor_resolved": self._cursor_resolved(cursor_info),
         }
 
     @staticmethod
@@ -1131,6 +1184,7 @@ class SMA4WhistleExecutor(_SMA4ProvenanceMixin):
             "node": list(state.node) == list(decoded["node"]),
             "inventory": list(state.inventory) == list(decoded["inventory"]),
             "mode": decoded.get("mode") == "overworld",
+            "cursor_resolved": bool(decoded.get("cursor_resolved", True)),
         }
         return {
             "matches": all(checks.values()),
@@ -1239,7 +1293,14 @@ class SMA4WhistleExecutor(_SMA4ProvenanceMixin):
         inv = self.inventory()
         after_count = sum(1 for v in inv if v == self.WARP_WHISTLE)
         final_mode = self.core.last_info.get("mode")
-        exit_verified = final_mode == "overworld"
+        cursor_info = self._cursor_info()
+        final_cursor = tuple(cursor_info["cursor"])
+        exit_verified = (
+            final_mode == "overworld"
+            and self._cursor_resolved(cursor_info)
+            and final_cursor == (160, 32)
+            and self._read_u8(self.ITEM_MENU_OPEN) == 0
+        )
         success = (
             after_count >= max(1, prior_count + 1)
             and exit_verified
@@ -1255,6 +1316,8 @@ class SMA4WhistleExecutor(_SMA4ProvenanceMixin):
             "inventory_first4": inv[:4],
             "whistle_count": int(after_count),
             "final_mode": final_mode,
+            "final_cursor": list(final_cursor),
+            "cursor_resolved": self._cursor_resolved(cursor_info),
             "exit_verified": exit_verified,
             "solution": str(sol_path),
             "entry_snapshot": str(entry),
@@ -1374,10 +1437,15 @@ class SMA4WhistleExecutor(_SMA4ProvenanceMixin):
                 expected_observable=snap_observable,
             )
             frames += self._step((), 2)
+        cursor_info = self._cursor_info()
+        final_cursor = tuple(cursor_info["cursor"])
         success = (
             self.core.last_info.get("mode") == "overworld"
             and after_count >= target_count
             and menu_ok
+            and self._cursor_resolved(cursor_info)
+            and final_cursor == (96, 96)
+            and self._read_u8(self.ITEM_MENU_OPEN) == 0
         )
         injected = [
             f for f in (sol.get("injected_facts") or [
@@ -1399,44 +1467,34 @@ class SMA4WhistleExecutor(_SMA4ProvenanceMixin):
             "samples": samples,
             "inventory_first4": inv[:4],
             "whistle_count": int(after_count),
+            "final_cursor": list(final_cursor),
+            "cursor_resolved": self._cursor_resolved(cursor_info),
+            "menu_probe_succeeded": bool(menu_ok),
             "solution": str(sol_path),
             "entry_snapshot": str(entry),
             "knowledge_tier": int(KnowledgeTier.TIER2_BLACK_BOX_OPTION),
             "injected_facts": injected,
         }
 
-    def _sync_map_cursor(self, x: int, y: int, *,
-                         reason: str, frame: int | None = None) -> None:
-        """Write map cursor when AcquireWhistle leaves MAP_CURSOR_* stale."""
-        self._write_u8(
-            self.core.MAP_CURSOR_X,
-            int(x) & 0xFF,
-            reason=f"{reason}:x",
-            knowledge_tier=KnowledgeTier.TIER3_SUBGOAL_HINT,
-            frame=frame,
-        )
-        self._write_u8(
-            self.core.MAP_CURSOR_Y,
-            int(y) & 0xFF,
-            reason=f"{reason}:y",
-            knowledge_tier=KnowledgeTier.TIER3_SUBGOAL_HINT,
-            frame=frame,
-        )
-        self.core._last_info = self.core._normalize_info(self.core.last_info)
-
-    def _cursor_off_grid(self) -> bool:
-        cx = self._read_u8(self.core.MAP_CURSOR_X)
-        cy = self._read_u8(self.core.MAP_CURSOR_Y)
-        return (cx % 0x20) != 0 or (cy % 0x20) != 0
-
     def use_first_whistle(self) -> dict:
         frames = 0
         samples = [self.sample("before_first_whistle", frames)]
+        before_count = sum(
+            1 for value in self.inventory() if value == self.WARP_WHISTLE
+        )
+        if before_count == 0:
+            samples.append(self.sample("first_whistle_missing_inventory", frames))
+            return {
+                "success": False,
+                "cost_frames": frames,
+                "samples": samples,
+                "reason": "no_whistle_in_inventory",
+            }
         frames += self._open_and_use_selected_item()
         samples.append(self.sample("after_first_use_input", frames))
-        # Wait for raw world 8, then for the canonical warp-zone cursor when the
-        # map updates it.  After AcquireWhistle the cursor bytes can stay stale;
-        # sync them so inventory L/A keeps working for the second whistle.
+        # Wait for raw world 8, then require the canonical first warp-zone cell.
+        # The adapter resolves the active cursor storage pair; no RAM repair is
+        # needed when the 1-3 Toad-house exit leaves the primary pair stale.
         ok, elapsed = self._wait_until(
             lambda: self._read_u8(self.core.WORLD) == self.WARP_ZONE_WORLD_RAW,
             max_frames=2200,
@@ -1444,27 +1502,38 @@ class SMA4WhistleExecutor(_SMA4ProvenanceMixin):
         frames += elapsed
         if ok:
             ok2, elapsed2 = self._wait_until(
-                lambda: self._read_u8(self.core.MAP_CURSOR_X) == 64
-                and self._read_u8(self.core.MAP_CURSOR_Y) == 80,
+                lambda: self._cursor_matches((64, 80)),
                 max_frames=900,
             )
             frames += elapsed2
-            if not ok2:
-                self._sync_map_cursor(
-                    64,
-                    80,
-                    reason="repair_stale_first_warp_zone_cursor",
-                    frame=frames,
-                )
-                frames += self._step((), 60)
-                ok2 = self._read_u8(self.core.WORLD) == self.WARP_ZONE_WORLD_RAW
             ok = ok and ok2
         samples.append(self.sample("after_first_whistle_warp_zone", frames))
         if not ok:
             return {"success": False, "cost_frames": frames, "samples": samples}
         frames += self._step((), 180)
         samples.append(self.sample("after_first_whistle_settled", frames))
-        return {"success": True, "cost_frames": frames, "samples": samples}
+        after_count = sum(
+            1 for value in self.inventory() if value == self.WARP_WHISTLE
+        )
+        final = samples[-1]
+        terminal_invariants = {
+            "raw_world_is_warp_zone": (
+                final["world_raw_0_indexed"] == self.WARP_ZONE_WORLD_RAW
+            ),
+            "cursor_is_first_warp_cell": final["cursor"] == [64, 80],
+            "cursor_resolved": bool(final["cursor_resolved"]),
+            "mode_is_overworld": final.get("mode") == "overworld",
+            "item_menu_closed": final.get("item_menu_open") == 0,
+            "whistle_inventory_decremented": after_count == before_count - 1,
+        }
+        success = all(terminal_invariants.values())
+        return {
+            "success": bool(success),
+            "cost_frames": frames,
+            "samples": samples,
+            "terminal_invariants": terminal_invariants,
+            "reason": None if success else "first_whistle_postcondition_failed",
+        }
 
     def use_second_whistle(self) -> dict:
         """Spend a remaining inventory whistle in the first warp-zone map.
@@ -1484,46 +1553,53 @@ class SMA4WhistleExecutor(_SMA4ProvenanceMixin):
                 "samples": samples,
                 "reason": "no_whistle_in_inventory",
             }
-        # AcquireWhistle can leave MAP_CURSOR off-grid so L won't open inventory.
-        # Sync only to the first warp-zone cell — never to the 5-8 cell early.
-        if (self._cursor_off_grid()
-                or self._read_u8(self.core.MAP_CURSOR_X) != 64
-                or self._read_u8(self.core.MAP_CURSOR_Y) != 80):
-            self._sync_map_cursor(
-                64,
-                80,
-                reason="repair_second_whistle_source_cursor",
-                frame=frames,
-            )
-            frames += self._step((), 30)
+        if not self._cursor_matches((64, 80)):
+            samples.append(self.sample(
+                "second_whistle_invalid_source_cursor", frames))
+            return {
+                "success": False,
+                "cost_frames": frames,
+                "samples": samples,
+                "reason": "not_at_first_warp_zone_cell",
+            }
+        before_count = sum(
+            1 for value in self.inventory() if value == self.WARP_WHISTLE
+        )
         frames += self._open_and_use_selected_item()
         samples.append(self.sample("after_second_use_input", frames))
         ok, elapsed = self._wait_until(
             lambda: self._read_u8(self.core.WORLD) == self.WARP_ZONE_WORLD_RAW
-            and (
-                (self._read_u8(self.core.MAP_CURSOR_X) >= 128
-                 and self._read_u8(self.core.MAP_CURSOR_Y) >= 144)
-                or self._read_u8(self.MAP_DEST_OR_REGION) != 0
-            ),
+            and self._cursor_matches((128, 144)),
             max_frames=2400,
         )
         frames += elapsed
-        # AcquireWhistle can leave cursor stuck below the 5-8 cell after the flip.
-        if ok and self._read_u8(self.core.MAP_CURSOR_X) < 128:
-            frames += self._step((), 300)
-            self._sync_map_cursor(
-                128,
-                144,
-                reason="repair_second_warp_zone_destination_cursor",
-                frame=frames,
-            )
-            frames += self._step((), 60)
         samples.append(self.sample("after_second_whistle_warp_zone_5_8", frames))
         if not ok:
             return {"success": False, "cost_frames": frames, "samples": samples}
         frames += self._step((), 480)
         samples.append(self.sample("after_second_whistle_settled", frames))
-        return {"success": True, "cost_frames": frames, "samples": samples}
+        after_count = sum(
+            1 for value in self.inventory() if value == self.WARP_WHISTLE
+        )
+        final = samples[-1]
+        terminal_invariants = {
+            "raw_world_is_warp_zone": (
+                final["world_raw_0_indexed"] == self.WARP_ZONE_WORLD_RAW
+            ),
+            "cursor_is_second_warp_cell": final["cursor"] == [128, 144],
+            "cursor_resolved": bool(final["cursor_resolved"]),
+            "mode_is_overworld": final.get("mode") == "overworld",
+            "item_menu_closed": final.get("item_menu_open") == 0,
+            "whistle_inventory_decremented": after_count == before_count - 1,
+        }
+        success = all(terminal_invariants.values())
+        return {
+            "success": bool(success),
+            "cost_frames": frames,
+            "samples": samples,
+            "terminal_invariants": terminal_invariants,
+            "reason": None if success else "second_whistle_postcondition_failed",
+        }
 
     def _probe_cursor_responsiveness(
             self, *, retained_frame: int | None = None) -> tuple[bool, int, list[dict]]:
@@ -1535,10 +1611,7 @@ class SMA4WhistleExecutor(_SMA4ProvenanceMixin):
         """
         snapshot = self.snapshot()
         observable = self.snapshot_observable()
-        initial = (
-            self._read_u8(self.core.MAP_CURSOR_X),
-            self._read_u8(self.core.MAP_CURSOR_Y),
-        )
+        initial = self._cursor()
         attempts: list[dict] = []
         evaluation_frames = 0
         responsive = False
@@ -1549,17 +1622,11 @@ class SMA4WhistleExecutor(_SMA4ProvenanceMixin):
             for _ in range(12):
                 self.core._step_buttons(buttons)
                 evaluation_frames += 1
-                samples.append([
-                    self._read_u8(self.core.MAP_CURSOR_X),
-                    self._read_u8(self.core.MAP_CURSOR_Y),
-                ])
+                samples.append(list(self._cursor()))
             for _ in range(6):
                 self.core._step_buttons(())
                 evaluation_frames += 1
-                samples.append([
-                    self._read_u8(self.core.MAP_CURSOR_X),
-                    self._read_u8(self.core.MAP_CURSOR_Y),
-                ])
+                samples.append(list(self._cursor()))
             return samples
 
         try:
@@ -1638,6 +1705,9 @@ class SMA4WhistleExecutor(_SMA4ProvenanceMixin):
             "mode_is_overworld": final.get("mode") == "overworld",
             "whistle_inventory_empty": whistle_count == 0,
             "cursor_responsive": bool(cursor_responsive),
+            "cursor_is_world8_start": final.get("cursor") == [32, 80],
+            "cursor_resolved": bool(final.get("cursor_resolved", True)),
+            "item_menu_closed": final.get("item_menu_open") == 0,
             "raw_world": final["world_raw_0_indexed"],
             "mode": final.get("mode"),
             "whistle_count": int(whistle_count),
@@ -1652,6 +1722,9 @@ class SMA4WhistleExecutor(_SMA4ProvenanceMixin):
                 "mode_is_overworld",
                 "whistle_inventory_empty",
                 "cursor_responsive",
+                "cursor_is_world8_start",
+                "cursor_resolved",
+                "item_menu_closed",
             )
         )
         return {

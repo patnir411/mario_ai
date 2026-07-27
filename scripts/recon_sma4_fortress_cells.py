@@ -30,8 +30,12 @@ def cursor(core) -> tuple[int, int]:
 
 
 def set_cursor(core, x: int, y: int) -> None:
-    core.env.data.memory.assign(core.MAP_CURSOR_X, "|u1", int(x) & 0xFF)
-    core.env.data.memory.assign(core.MAP_CURSOR_Y, "|u1", int(y) & 0xFF)
+    cursor_info = core.map_cursor_info()
+    base = cursor_info["resolved_pointer"]
+    if base is None:
+        raise RuntimeError(f"cannot inject unresolved map cursor: {cursor_info}")
+    core.env.data.memory.assign(base + 4, "|u1", int(x) & 0xFF)
+    core.env.data.memory.assign(base, "|u1", int(y) & 0xFF)
     for _ in range(20):
         core._step_buttons(())
 

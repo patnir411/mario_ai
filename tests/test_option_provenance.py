@@ -139,9 +139,12 @@ class _MapProbeCore:
     def __init__(self, *, responsive, autonomous=False):
         self.responsive = bool(responsive)
         self.autonomous = bool(autonomous)
+        # Responsive fakes traverse 16 unit frames during the retained RIGHT
+        # input and therefore arrive at the canonical World-8 start X=32.
+        initial_x = 16 if self.responsive else 32
         self.values = {
             self.WORLD: SMA4WhistleExecutor.WORLD_8_RAW,
-            self.MAP_CURSOR_X: 32,
+            self.MAP_CURSOR_X: initial_x,
             self.MAP_CURSOR_Y: 80,
             SMA4WhistleExecutor.ITEM_MENU_OPEN: 0,
             SMA4WhistleExecutor.MAP_EVENT: 17,
@@ -155,7 +158,7 @@ class _MapProbeCore:
         self.last_info = {
             "world": 8,
             "is_warp_zone": False,
-            "cursor": (32, 80),
+            "cursor": (initial_x, 80),
             "mode": "overworld",
             "cleared": 0,
             "time": 0,
@@ -520,6 +523,37 @@ def test_world8_acceptance_rejects_autonomous_cursor_motion():
         not attempt["diverged_from_noop"]
         for attempt in result["cursor_probe_attempts"]
     )
+
+
+def test_meta_state_comparison_rejects_unresolved_cursor_observation():
+    state = MetaState(world=8, node=(32, 80))
+    decoded = {
+        "world": 8,
+        "node": [32, 80],
+        "inventory": [],
+        "mode": "overworld",
+        "cursor_resolved": False,
+    }
+
+    comparison = SMA4WhistleExecutor.compare_meta_state(state, decoded)
+
+    assert comparison["checks"]["world"] is True
+    assert comparison["checks"]["node"] is True
+    assert comparison["checks"]["cursor_resolved"] is False
+    assert comparison["matches"] is False
+
+
+def test_executor_fallback_preserves_unresolved_cursor_provenance():
+    core = _MapProbeCore(responsive=False)
+    core.last_info["cursor_resolved"] = False
+    executor = SMA4WhistleExecutor(core)
+
+    decoded = executor.decode_meta_state()
+
+    assert decoded["node"] == [32, 80]
+    assert decoded["cursor_resolved"] is False
+    assert not executor.compare_meta_state(
+        MetaState(world=8, node=(32, 80)), decoded)["matches"]
 
 
 def test_two_option_boundaries_chain_after_executor_corruption():

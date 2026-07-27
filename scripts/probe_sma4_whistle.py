@@ -57,12 +57,18 @@ def _grant_whistles(adapter: SMA4Adapter, count: int) -> None:
 
 
 def _sample(adapter: SMA4Adapter, label: str, frame: int) -> dict:
+    cursor = adapter.map_cursor_info()
     return {
         "label": label,
         "frame": frame,
         "world_raw_0_indexed": _u8(adapter, adapter.WORLD),
         "world_normalized": int(adapter.last_info.get("world", 0)),
-        "cursor": [_u8(adapter, adapter.MAP_CURSOR_X), _u8(adapter, adapter.MAP_CURSOR_Y)],
+        "cursor": list(cursor["cursor"]),
+        "cursor_source": cursor["source"],
+        "cursor_pointer": cursor["raw_pointer"],
+        "cursor_resolved_pointer": cursor["resolved_pointer"],
+        "cursor_resolved": cursor["resolved"],
+        "cursor_legacy": list(cursor["legacy"]),
         "mode": adapter.last_info.get("mode"),
         "time": int(adapter.last_info.get("time", 0)),
         "inventory_first4": _inventory(adapter)[:4],
@@ -126,8 +132,8 @@ def main() -> int:
         ok, elapsed = _wait_until(
             adapter,
             lambda a: _u8(a, a.WORLD) == 8
-            and _u8(a, a.MAP_CURSOR_X) == 64
-            and _u8(a, a.MAP_CURSOR_Y) == 80,
+            and a.map_cursor_info()["resolved"]
+            and a.map_cursor() == (64, 80),
             max_frames=2200,
         )
         frame += elapsed
@@ -150,8 +156,8 @@ def main() -> int:
         ok2, elapsed = _wait_until(
             adapter,
             lambda a: _u8(a, a.WORLD) == 8
-            and _u8(a, a.MAP_CURSOR_X) >= 128
-            and _u8(a, a.MAP_CURSOR_Y) >= 144,
+            and a.map_cursor_info()["resolved"]
+            and a.map_cursor() == (128, 144),
             max_frames=2400,
         )
         frame += elapsed
@@ -206,8 +212,12 @@ def main() -> int:
             "warp_whistle_item_id": hex(WARP_WHISTLE),
             "item_menu_open_flag": hex(ITEM_MENU_OPEN),
             "world": hex(SMA4Adapter.WORLD),
-            "map_cursor_x": hex(SMA4Adapter.MAP_CURSOR_X),
-            "map_cursor_y": hex(SMA4Adapter.MAP_CURSOR_Y),
+            "map_cursor_pointer": hex(SMA4Adapter.MAP_CURSOR_PTR),
+            "map_cursor_known_bases": [
+                hex(base) for base in sorted(SMA4Adapter.MAP_CURSOR_BASES)
+            ],
+            "legacy_map_cursor_x": hex(SMA4Adapter.MAP_CURSOR_X),
+            "legacy_map_cursor_y": hex(SMA4Adapter.MAP_CURSOR_Y),
             "map_event": hex(MAP_EVENT),
             "map_dest_or_region": hex(MAP_DEST_OR_REGION),
         },
@@ -221,6 +231,8 @@ def main() -> int:
         "notes": [
             "Raw world byte 8 is the special warp-zone map, not normalized World 8.",
             "Raw world byte 7 after dismissing Bowser's letter is SMA4 World 8.",
+            "The live cursor is read through MAP_CURSOR_PTR; fixed legacy bytes "
+            "can be stale after the 1-3 Toad-house exit.",
             "The adapter mode classifier special-cases raw world bytes 7/8 so World 8 and "
             "warp-zone map states read as overworld despite off-grid cursor Y positions.",
         ],

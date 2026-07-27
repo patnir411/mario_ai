@@ -262,5 +262,5 @@ def test_sma4_mode_classifier_handles_warp_zone_and_world8_maps():
     assert SMA4Adapter._classify_mode(
         0, 64, 80, world_raw=8, item_menu_open=1) == "menu"
     assert SMA4Adapter._classify_mode(
-        0, 14, 135, world_raw=0, item_menu_open=0,
+        0, 130, 80, world_raw=0, item_menu_open=0,
         map_event=0x11) == "overworld"

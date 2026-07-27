@@ -13,8 +13,10 @@ confirming experiments and prints/asserts the findings, so the addresses baked i
 `mario.adapters` can be re-verified after any ROM/emulator change.
 
 Confirmed (IWRAM):
-    MAP_CURSOR_X = 0x03003DE4   units of 0x20; +0x20 per rightward node step
-    MAP_CURSOR_Y = 0x03003DE0   units of 0x20; -0x20 per upward node step
+    MAP_CURSOR_PTR = 0x03007824  live cursor-object base pointer
+    cursor Y       = ptr + 0     units of 0x10/0x20 by map layout
+    cursor X       = ptr + 4     +0x20 per horizontal node step
+    known bases    = 0x03003DE0, 0x03004EF8
     WORLD        = 0x03002A69   0-indexed (0 == World 1)
     PROGRESS     = 0x03002C52   flips 0 -> 3 after clearing 1-1 (provisional bitmap)
     mode: in a level y_pos != 0 and the level timer runs; on the map the timer is 0
@@ -36,8 +38,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from mario.adapters import SMA4Adapter  # noqa: E402
 
-MAP_CURSOR_X = 0x03003DE4
-MAP_CURSOR_Y = 0x03003DE0
 WORLD = 0x03002A69
 PROGRESS = 0x03002C52
 
@@ -52,8 +52,12 @@ def _u8(adapter, addr):
 
 
 def _on_map(adapter):
-    cx, cy = _u8(adapter, MAP_CURSOR_X), _u8(adapter, MAP_CURSOR_Y)
-    return adapter.last_info["time"] == 0 and cx % 0x20 == 0 and cy % 0x20 == 0 and (cx or cy)
+    cursor = adapter.map_cursor_info()
+    return (
+        adapter.last_info["time"] == 0
+        and bool(cursor["resolved"])
+        and adapter.last_info["mode"] == "overworld"
+    )
 
 
 def main(argv=None) -> int:
@@ -73,17 +77,23 @@ def main(argv=None) -> int:
     a = SMA4Adapter(boot_target="overworld")
     try:
         _hold(a, (), 90)  # settle at START
-        cx0, cy0, world = _u8(a, MAP_CURSOR_X), _u8(a, MAP_CURSOR_Y), _u8(a, WORLD)
-        log(f"START: cursor=({cx0},{cy0}) world={world} on_map={bool(_on_map(a))}")
+        cx0, cy0 = a.map_cursor()
+        world = _u8(a, WORLD)
+        cursor_info = a.map_cursor_info()
+        pointer = cursor_info["resolved_pointer"]
+        pointer_label = f"{pointer:#010x}" if pointer is not None else "unresolved"
+        log(f"START: cursor=({cx0},{cy0}) pointer="
+            f"{pointer_label} "
+            f"world={world} on_map={bool(_on_map(a))}")
         assert _on_map(a), "boot_target='overworld' did not land on the map"
 
         # Cursor X tracks RIGHT; cursor Y tracks UP; each move steps the 0x20 grid.
         _hold(a, ("RIGHT",), 16); _hold(a, (), 20)
-        cx1, cy1 = _u8(a, MAP_CURSOR_X), _u8(a, MAP_CURSOR_Y)
+        cx1, cy1 = a.map_cursor()
         log(f"after RIGHT: cursor=({cx1},{cy1})  dx={cx1 - cx0} dy={cy1 - cy0}")
         assert cx1 > cx0 and cy1 == cy0, "cursor X did not track RIGHT"
         _hold(a, ("UP",), 16); _hold(a, (), 20)
-        cx2, cy2 = _u8(a, MAP_CURSOR_X), _u8(a, MAP_CURSOR_Y)
+        cx2, cy2 = a.map_cursor()
         log(f"after UP:    cursor=({cx2},{cy2})  dx={cx2 - cx1} dy={cy2 - cy1}")
         assert cy2 < cy1 and cx2 == cx1, "cursor Y did not track UP"
 
@@ -119,14 +129,14 @@ def main(argv=None) -> int:
             on_map = False
             for _ in range(2000):
                 b._step_buttons(())
-                if b.last_info["time"] == 0 and _u8(b, MAP_CURSOR_X) % 0x20 == 0 \
-                        and (_u8(b, MAP_CURSOR_X) or _u8(b, MAP_CURSOR_Y)):
+                if _on_map(b):
                     on_map = True
                     break
             after = _u8(b, PROGRESS)
+            cursor = b.map_cursor()
             log(f"progress {PROGRESS:#010x}: before={before} after={after} "
                 f"(back_on_map={on_map}, cursor advanced to "
-                f"({_u8(b, MAP_CURSOR_X)},{_u8(b, MAP_CURSOR_Y)}))")
+                f"{cursor})")
         finally:
             b.close()
 

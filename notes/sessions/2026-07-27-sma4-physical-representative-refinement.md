@@ -4,6 +4,13 @@
 > integrity pass. Literature availability is cut off at **2026-07-25**.
 > Implementation and verification continued on July 26–27 in America/Detroit.
 > Observations come before interpretation and planning.
+>
+> **Corrected later on 2026-07-27:** the reported acquisition-order
+> responsiveness split came from reading an abandoned fixed cursor object.
+> Both histories pass at maximum Tier 2 when the live pointer is followed; see
+> `2026-07-27-sma4-live-cursor-pointer-tier2.md`. The multi-representative and
+> finite-refinement architecture remains valid, while the stuck-cursor
+> diagnosis and P1/P2 repair plan are superseded.
 
 ## 1. Question
 

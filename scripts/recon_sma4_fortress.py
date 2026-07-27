@@ -27,8 +27,12 @@ def _shot(core, path: Path) -> None:
 
 
 def _set_cursor(core, x: int, y: int) -> None:
-    core.env.data.memory.assign(core.MAP_CURSOR_X, "|u1", int(x) & 0xFF)
-    core.env.data.memory.assign(core.MAP_CURSOR_Y, "|u1", int(y) & 0xFF)
+    cursor = core.map_cursor_info()
+    base = cursor["resolved_pointer"]
+    if base is None:
+        raise RuntimeError(f"cannot inject unresolved map cursor: {cursor}")
+    core.env.data.memory.assign(base + 4, "|u1", int(x) & 0xFF)
+    core.env.data.memory.assign(base, "|u1", int(y) & 0xFF)
     for _ in range(20):
         core.step(0)
     core._last_info = core._normalize_info(core.last_info)

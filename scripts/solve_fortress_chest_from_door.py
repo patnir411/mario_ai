@@ -125,10 +125,8 @@ def main() -> int:
                     frame_buttons.append(["B"])
                 payload["path_buttons"] = frame_buttons
                 payload["exit_mode"] = core.last_info.get("mode")
-                payload["exit_cursor"] = [
-                    int(ex._read_u8(ex.core.MAP_CURSOR_X)),
-                    int(ex._read_u8(ex.core.MAP_CURSOR_Y)),
-                ]
+                payload["exit_cursor"] = list(ex._cursor())
+                payload["exit_cursor_info"] = ex._cursor_info()
                 # L-menu check
                 snap = core.snapshot()
                 menu = False

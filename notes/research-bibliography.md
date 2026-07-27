@@ -74,13 +74,17 @@ variable-duration actions, selective policy handoff, and reliable evaluation.
    - Exact boundary instrumentation now gives a constructive counterexample to
      `MetaState` sufficiency: opposite whistle-acquisition orders reach one
      symbolic warp state with different physical emulator/RAM states. The
-   Opt-in multi-representative physical search and finite option-signature
-   refinement now preserve both acquisition histories. They separate under
-   short option suffixes: only the 1-3-then-fortress order reaches an
-   input-responsive World-8 map in the current Tier-3 implementation. The
-   immediate gate is to explain that lineage asymmetry, remove the Tier-3
-   cursor repair, and then join legitimate power acquisition to the live
-   unpowered fortress entry.
+     opt-in multi-representative physical search and finite option-signature
+     refinement preserve both acquisition histories rather than borrowing one
+     snapshot.
+   - The apparent acquisition-order responsiveness split was a decoder bug:
+     fixed cursor bytes can name an abandoned object after the 1-3 exit. Following
+     the live pointer at `0x03007824` makes both histories input-responsive and
+     removes all cursor writes. The mixed route now passes at maximum Tier 2.
+   - The immediate gate is no longer a cursor-repair suffix. It is one continuous
+     physical lineage with legitimate power/inventory: remove the independent
+     acquisition roots, inventory merge, and fortress leaf rehold before replacing
+     the symbolic World-8/Bowser endpoint.
 
 ## References
 
@@ -478,10 +482,12 @@ Secondary, conditional leads:
 - Data Crystal RAM maps.
   - NES SMB3: https://datacrystal.tcrf.net/wiki/Super_Mario_Bros._3/RAM_map
   - SMA4 (GBA): https://datacrystal.tcrf.net/wiki/Super_Mario_Advance_4:_Super_Mario_Bros._3/RAM_map
-  - Repo relevance: seeded the confirmed SMA4 map-cursor/world addresses (see
-    `notes/sessions/2026-06-26-smb3-overworld-foundation.md` and `scripts/probe_overworld.py`);
-    seeded the SMA4 inventory-slot range and warp-whistle item id used by
-    `scripts/probe_sma4_whistle.py`.
+  - Repo relevance: seeded the legacy SMA4 map-cursor/world addresses (see
+    `notes/sessions/2026-06-26-smb3-overworld-foundation.md` and
+    `scripts/probe_overworld.py`) plus the inventory-slot range and whistle item
+    id. Local causal probing later showed that the fixed cursor pair is not
+    universal: the active object is selected by the pointer at `0x03007824`,
+    and the 1-3 exit can relocate it to `0x03004EF8`.
 
 - Erick Guillen's SMA4 RAM table.
   - URL: https://erick.guillen.com.mx/sma4_ram.html
@@ -548,6 +554,40 @@ Secondary, conditional leads:
     billions of samples of option discovery.
 
 ### State abstraction at option boundaries (July 25 literature cutoff; July 26–27 implementation)
+
+- George Konidaris, Leslie Pack Kaelbling, Tomás Lozano-Pérez, "From Skills to
+  Symbols: Learning Symbolic Representations for Abstract High-Level Planning",
+  *Journal of Artificial Intelligence Research* 61, 2018.
+  - DOI: https://doi.org/10.1613/JAIR.5575
+  - Repo experiment: construct candidate symbols from option initiation and
+    effect requirements—logical cursor cell, menu readiness, inventory
+    multiplicity, world, and power—rather than from convenient fixed RAM
+    addresses. Validate each proposed symbol against held-out option and
+    primitive suffixes before using it for frontier dominance.
+
+- Tianwei Ni et al., "Bridging State and History Representations:
+  Understanding Self-Predictive RL", ICLR 2024.
+  - Official proceedings:
+    https://proceedings.iclr.cc/paper_files/paper/2024/hash/666c1861d709bd84e20b6e0e02a2c223-Abstract-Conference.html
+  - Repo experiment: score candidate boundary features by their ability to
+    predict exact finite option outcomes and costs across independently
+    restored histories. The pointer-resolved cursor should generalize across
+    the two acquisition orders; the abandoned fixed pair should fail.
+
+- Kevin Muyuan Xia, Elias Bareinboim, "Causal Abstraction Inference under Lossy
+  Representations", ICML 2025.
+  - PMLR: https://proceedings.mlr.press/v267/xia25a.html
+  - Repo experiment: treat the two cursor-object bases as distinct low-level
+    realizations of one logical map-cell variable and test matched input
+    interventions for invariant high-level effects. Keep base and pointer
+    provenance in reports even if the logical abstraction merges them.
+
+- David Abel, David Hershkowitz, Michael Littman, "Near Optimal Behavior via
+  Approximate State Abstraction", ICML 2016.
+  - PMLR: https://proceedings.mlr.press/v48/abel16.html
+  - Repo experiment: retain exact physical records and finite signatures as
+    the acceptance oracle; only then test whether bounded approximate merging
+    reduces representatives under a declared outcome/cost error budget.
 
 - Balaraman Ravindran, Andrew G. Barto, "SMDP Homomorphisms: An Algebraic
   Approach to Abstraction in Semi-Markov Decision Processes", IJCAI 2003.
@@ -659,6 +699,30 @@ Secondary, conditional leads:
     physical class. PUMA assumes execution reveals a reusable action model;
     SMA4 has not earned reuse across hidden lineages.
 
+- W3C, "PROV-DM: The PROV Data Model", W3C Recommendation, 2013.
+  - Recommendation: https://www.w3.org/TR/prov-dm/
+  - Repo experiment: model roots/snapshots/successors as entities, option
+    executions as activities, and parent records/interventions as derivations.
+    Bind every final report to source commit, ROM, root, action transcript,
+    decoder provenance, and clean/dirty state.
+
+- Joelle Pineau et al., "Improving Reproducibility in Machine Learning
+  Research (A Report from the NeurIPS 2019 Reproducibility Program)", JMLR 22,
+  2021.
+  - JMLR: https://jmlr.org/papers/v22/20-303.html
+  - Repo experiment: keep the clean-source report gate, explicit claim scope,
+    replay commands, source/root/core hashes, and negative/failed conditions as
+    part of the result rather than incidental lab bookkeeping.
+
+- Andreas Zeller, Ralf Hildebrandt, "Simplifying and Isolating
+  Failure-Inducing Input", *IEEE Transactions on Software Engineering* 28(2),
+  2002.
+  - DOI: https://doi.org/10.1109/32.988498
+  - Repo experiment: minimize future input-history counterexamples only after
+    validating that the compared observer follows the same logical object.
+    The cursor case demonstrates why delta debugging a bad decoder can optimize
+    around the wrong failure.
+
 #### Local Stable-Retro/mGBA serialization diagnosis
 
 - Stable-Retro 1.0.1, `src/retro.cpp`, savestate allocation:
@@ -706,8 +770,11 @@ Secondary, conditional leads:
 
 - The active product thesis is the **Option-SMDP whistle benchmark** (SMA4), not a flat generalist.
   - Backed by Sutton options, the local planner-class contrast artifacts, and the 2026-07-14 plan.
-  - Honesty requirement: replace Tier-1 hand-grants with Tier-2 AcquireWhistle before claiming the
-    meta-intelligence gap is fully measured.
+  - Current boundary: both acquisition orders now reach responsive World 8 at
+    maximum Tier 2 with no cursor writes, but they still compose independent
+    roots, an inventory merge, a fortress leaf rehold, and a symbolic Bowser
+    edge. The next honest claim requires one continuous write-free physical
+    lineage, not a larger planner.
 
 - The generalist controller track is deprioritized.
   - Backed by Procgen/CoinRun, V4-V6 local failures, and the mismatch between robotic manipulation
