@@ -447,8 +447,11 @@ def coverage_search_adapter(adapter, *, beam_width: int = 64, chunk_frames: int 
                             progress_every: int = 0,
                             physics_cell: bool = True,
                             trace_path: str | Path | None = None) -> SearchResult:
-    """Adapter-generic Go-Explore: beam + a cell archive with a one-time novelty
-    bonus per newly reached `(x_tile, y_tile)` cell.
+    """Adapter-generic novelty-augmented beam search.
+
+    A one-time bonus is assigned to cells not reached by an earlier retained
+    frontier. Generated candidates that lose per-cell deduplication or beam
+    truncation do not consume global novelty.
 
     Plain `beam_search_adapter` plateaus where an obstacle (a pit/pipe needing a
     jump) gives no x-gain, so the frontier empties before clearing it.  Rewarding
@@ -536,10 +539,13 @@ def coverage_search_adapter(adapter, *, beam_width: int = 64, chunk_frames: int 
                 break
             best_by: dict[tuple, Node] = {}
             for cl, c in scored:
-                visited.add(cl)
                 if cl not in best_by or c.score > best_by[cl].score:
                     best_by[cl] = c
-            beam = sorted(best_by.values(), key=lambda c: c.score, reverse=True)[:beam_width]
+            retained = sorted(
+                best_by.items(), key=lambda item: item[1].score, reverse=True
+            )[:beam_width]
+            beam = [child for _cell, child in retained]
+            visited.update(cell_key for cell_key, _child in retained)
             if beam[0].x_max > best.x_max:
                 best = beam[0]
             if progress_every and depth % progress_every == 0:
@@ -735,12 +741,12 @@ def coverage_search(world: int = 1, stage: int = 1, *, beam_width: int = 48,
                     policy_prior=None, policy_weight: float = 80.0,
                     policy_topk: int | None = None, policy_mix_eps: float = 0.05,
                     progress_every: int = 200) -> SearchResult:
-    """Beam search + Go-Explore coverage — the general solver for ALL level types.
+    """Primary novelty-augmented beam search for NES level routing.
 
     Plain x-greedy beam loops forever on the maze castles (4-4/7-4/8-4): its dedup key is
     pure (x,y) and its reward gives no credit for entering the correct pipe (an AREA change
     that resets x), so it plateaus at the loop boundary while the beam empties. This fixes
-    both: the dedup key is the Go-Explore CELL (area $0760, x-tile, y-tile) so different
+    both: the dedup key is a coarse cell (area $0760, x-tile, y-tile) so different
     maze rooms/heights never collapse, and every NEW cell a lineage opens earns a one-time
     novelty bonus — so the search actively values reaching new rooms/heights (pipe entry,
     the non-looping route) instead of only rightward x. On linear levels novelty saturates
@@ -782,7 +788,11 @@ def coverage_search(world: int = 1, stage: int = 1, *, beam_width: int = 48,
 
     root_info = sim.last_info
     x_start = int(root_info.get("x_pos", 0))
-    visited = {cell(sim.ram)}
+    # Novelty belongs only to retained frontiers. Loop evidence is broader:
+    # a previously generated-but-pruned cell still proves that a later
+    # backward jump is not a new room.
+    novelty_committed = {cell(sim.ram)}
+    ever_reached = set(novelty_committed)
     root = Node(sim.snapshot(), 0.0, root_info, [], x_start, 0, 0)
     root.wp_idx = 0   # reuse wp_idx as cumulative novelty count along the lineage
     root.area = int(sim.ram[AREA])
@@ -805,6 +815,7 @@ def coverage_search(world: int = 1, stage: int = 1, *, beam_width: int = 48,
         if time.perf_counter() - t0 > time_budget_s:
             break
         candidates: list[Node] = []
+        reached_this_depth: set[tuple] = set()
         for node in beam:
             lp = None
             action_iter = range(n_actions)
@@ -837,6 +848,7 @@ def coverage_search(world: int = 1, stage: int = 1, *, beam_width: int = 48,
                 if is_death(info, done):
                     continue
                 c = cell(sim.ram)
+                reached_this_depth.add(c)
                 x = int(info.get("x_pos", 0))
                 # page-progress: a REAL pipe/page entry = $0750 changed AND the gym in-step skip
                 # teleported Mario (info.x_pos lags live RAM x) OR a live pipe state. This is the
@@ -851,11 +863,9 @@ def coverage_search(world: int = 1, stage: int = 1, *, beam_width: int = 48,
                 # A real_entry resets the page (x is a fresh page coord), so never prune it.
                 if (not real_entry and loop_back_px and c[0] == node.area
                         and x < node.x_max - loop_back_px
-                        and (c in visited or not loop_needs_visited)):
+                        and (c in ever_reached or not loop_needs_visited)):
                     continue
-                novel = c not in visited
-                if novel:
-                    visited.add(c)
+                novel = c not in novelty_committed
                 stuck = 0 if (x > node.x_max or novel or real_entry) else node.stuck + 1
                 if stuck > stuck_cap:
                     continue
@@ -891,8 +901,11 @@ def coverage_search(world: int = 1, stage: int = 1, *, beam_width: int = 48,
             if pipe_macro_chunks:
                 sim.restore(node.snap)
                 m_done = False
+                macro_chunks_executed = 0
                 for _ in range(pipe_macro_chunks):
                     info, m_done = sim.run_chunk(7, chunk_frames)
+                    macro_chunks_executed += 1
+                    nodes += 1
                     live_x = mario_level_x(sim.ram)
                     entered = (int(sim.ram[AREA]) != node.area
                                or (page_aware and int(sim.ram[APTR]) != node.aptr
@@ -901,47 +914,71 @@ def coverage_search(world: int = 1, stage: int = 1, *, beam_width: int = 48,
                     if is_success(info) or entered or m_done:
                         break
                 if is_success(info):
+                    # `run_chunk` may terminate before its requested frame
+                    # budget. SearchResult.frames has historically stored
+                    # scheduled chunk-frame cost, so keep that convention
+                    # explicit rather than claiming exact emulator steps.
+                    scheduled_macro_frames = (
+                        macro_chunks_executed * chunk_frames
+                    )
                     sim.close()
                     return SearchResult(
-                        True, node.path + [7] * pipe_macro_chunks, chunk_frames, info,
-                        int(info.get("x_pos", 0)), node.frames, depth, nodes,
+                        True, node.path + [7] * macro_chunks_executed, chunk_frames, info,
+                        int(info.get("x_pos", 0)),
+                        node.frames + scheduled_macro_frames,
+                        depth, nodes,
                         time.perf_counter() - t0, beam_width, DEFAULT)
                 na = int(sim.ram[AREA]); na_ptr = int(sim.ram[APTR]); live_x = mario_level_x(sim.ram)
                 real = (na != node.area or (page_aware and na_ptr != node.aptr
                         and (abs(int(info.get("x_pos", live_x)) - live_x) > 100 or pipe_entering(sim.ram))))
                 if not m_done and real:                   # entered a pipe → new area/page!
                     c = cell(sim.ram); x = int(info.get("x_pos", 0))
-                    visited.add(c)
+                    reached_this_depth.add(c)
+                    macro_novel = c not in novelty_committed
+                    scheduled_macro_frames = (
+                        macro_chunks_executed * chunk_frames
+                    )
                     ps = node.page_seq + 1
                     score = (ps * PAGE_W + state_score(info, x_start, 0, False, 0, DEFAULT)
-                             + cov_bonus * (node.wp_idx + 1) + area_bonus * na
+                             + cov_bonus * (node.wp_idx + int(macro_novel)) + area_bonus * na
                              + ground_bonus * (node.ground_xmax - x_start))
                     if value_guide is not None:
                         score += value_weight * value_guide.p(observe_fn(sim.ram, info))
                     if lp is not None and len(lp) > 7:
                         score += policy_weight * float(lp[7])
-                    mc = Node(sim.snapshot(), score, info, node.path + [7] * pipe_macro_chunks,
-                              live_x, 0, node.frames)
-                    mc.wp_idx = node.wp_idx + 1; mc.area = na; mc.ground_xmax = node.ground_xmax
+                    mc = Node(
+                        sim.snapshot(), score, info,
+                        node.path + [7] * macro_chunks_executed,
+                        live_x, 0,
+                        node.frames + scheduled_macro_frames,
+                    )
+                    mc.wp_idx = node.wp_idx + int(macro_novel)
+                    mc.area = na
+                    mc.ground_xmax = node.ground_xmax
                     mc.aptr = na_ptr; mc.page_seq = ps
                     if entity_obs_fn is not None:
                         mc.obs_hist = (list(node.obs_hist) + [entity_obs_fn(sim.ram, info)])[-pk:]
                     candidates.append((c, mc))
+        ever_reached.update(reached_this_depth)
         if not candidates:
             break
         best_by_key: dict[tuple, Node] = {}
         for c, ch in candidates:
             if c not in best_by_key or ch.score > best_by_key[c].score:
                 best_by_key[c] = ch
-        beam = sorted(best_by_key.values(), key=lambda n: n.score, reverse=True)[:beam_width]
+        retained = sorted(
+            best_by_key.items(), key=lambda item: item[1].score, reverse=True
+        )[:beam_width]
+        beam = [child for _cell, child in retained]
+        novelty_committed.update(cell_key for cell_key, _child in retained)
         cand_best = max(beam, key=prog)
         if prog(cand_best) > prog(best):
             best = cand_best
         if progress_every and depth % progress_every == 0:
             max_area = max(getattr(n, "area", 0) for n in beam)
             print(f"  depth {depth:4d} | beam {len(beam):3d} | best area{best.area} x{best.x_max:5d} "
-                  f"gnd{getattr(best,'ground_xmax',0):5d} | beam_max_area {max_area} "
-                  f"| cells {len(visited):5d} | nodes {nodes:8d} "
+                      f"gnd{getattr(best,'ground_xmax',0):5d} | beam_max_area {max_area} "
+                      f"| cells {len(novelty_committed):5d} | nodes {nodes:8d} "
                   f"| {nodes/(time.perf_counter()-t0):6.0f} n/s", flush=True)
             if checkpoint_path:
                 import json as _json
@@ -1020,7 +1057,11 @@ def area_search(world: int, stage: int, *, start_prefix: list[int] | None = None
         return (int(ram[AREA_POINTER]), mario_level_x(ram) // tile, int(ram[Y_ADDR]) // tile,
                 int(ram[0x0756]), vb)   # area-pointer, x-tile, y-tile, powerup, vx-sign
 
-    visited = {cell(sim.ram)}
+    # Keep retained-frontier novelty separate from transition evidence. A cell
+    # that was generated and beam-pruned still makes a later backward jump a
+    # known loop rather than a newly discovered hidden-pipe destination.
+    novelty_committed = {cell(sim.ram)}
+    ever_reached = set(novelty_committed)
     # node tuple: (snap, path, x_max_in_area, stuck, novelty)
     beam = [(sim.snapshot(), [], entry_x, 0, 0)]
     best_path, best_x = [], entry_x
@@ -1031,6 +1072,7 @@ def area_search(world: int, stage: int, *, start_prefix: list[int] | None = None
         if time.perf_counter() - t0 > time_budget_s:
             break
         candidates = []
+        reached_this_depth: set[tuple] = set()
         for snap, path, x_max, stuck, nov in beam:
             for a in range(n_actions):
                 sim.restore(snap)
@@ -1041,20 +1083,23 @@ def area_search(world: int, stage: int, *, start_prefix: list[int] | None = None
                 # pipe/area entry whose destination shares the area bytes (2-2-class), which the
                 # plain transitioned() (area-key/$06DE/stage) cannot see (gym fast-forwards it).
                 # A jump back into a VISITED cell is the maze LOOP (8-4 page16->12) — NOT success.
-                jumped = (x_jump_px and (prev_x - mario_level_x(sim.ram)) > x_jump_px
-                          and cell(sim.ram) not in visited)
+                current_cell = cell(sim.ram)
+                jumped = (
+                    x_jump_px
+                    and (prev_x - mario_level_x(sim.ram)) > x_jump_px
+                    and current_cell not in ever_reached
+                )
                 if jumped or transitioned(info, sim.ram):   # flag / pipe / stage / new room / hidden-pipe jump
                     sim.close()
                     return True, path + [a], dict(info)
                 if is_death(info, done):
                     continue
-                c = cell(sim.ram)
+                c = current_cell
+                reached_this_depth.add(c)
                 x = mario_level_x(sim.ram)
                 if max_x is not None and x > max_x:   # local exploration cap (probe pipes here)
                     continue
-                novel = c not in visited
-                if novel:
-                    visited.add(c)
+                novel = c not in novelty_committed
                 nstuck = 0 if (x > x_max or novel) else stuck + 1
                 if nstuck > stuck_cap:
                     continue
@@ -1062,6 +1107,7 @@ def area_search(world: int, stage: int, *, start_prefix: list[int] | None = None
                 score = (x - entry_x) + cov_bonus * nnov   # within-area progress + coverage
                 candidates.append((c, sim.snapshot(), path + [a],
                                    max(x_max, x), nstuck, nnov, score, x))
+        ever_reached.update(reached_this_depth)
         if not candidates:
             break
         by_key: dict[tuple, tuple] = {}
@@ -1069,6 +1115,7 @@ def area_search(world: int, stage: int, *, start_prefix: list[int] | None = None
             if c not in by_key or sc > by_key[c][6]:
                 by_key[c] = (c, snp, pth, xm, st, nv, sc, x)
         ranked = sorted(by_key.values(), key=lambda t: t[6], reverse=True)[:beam_width]
+        novelty_committed.update(t[0] for t in ranked)
         beam = [(t[1], t[2], t[3], t[4], t[5]) for t in ranked]
         if ranked[0][7] > best_x:
             best_x, best_path = ranked[0][7], ranked[0][2]
@@ -1079,7 +1126,8 @@ def area_search(world: int, stage: int, *, start_prefix: list[int] | None = None
         if progress_every and depth % progress_every == 0:
             mx = max(t[7] for t in ranked)
             print(f"  [area {start_key}] depth {depth:4d} | beam {len(beam):3d} "
-                  f"| best_x {best_x:5d} | frontier_x {mx:5d} | cells {len(visited):5d} "
+                  f"| best_x {best_x:5d} | frontier_x {mx:5d} "
+                  f"| cells {len(novelty_committed):5d} "
                   f"| nodes {nodes:8d} | {nodes/(time.perf_counter()-t0):6.0f} n/s", flush=True)
 
     sim.close()

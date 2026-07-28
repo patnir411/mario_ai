@@ -12,6 +12,8 @@ def test_source_controlled_baseline_survives_without_ignored_runs(
     assert status["milestones"]["V2"]["best_run"] == "20260603-203756-v2_eval"
     assert status["current_best"]["1-1"]["beat"] is True
     assert status["tests"]["passed_gate"] is True
+    assert status["source_rev_at_generation"] == status["git_rev"]
+    assert "source at generation" in update_status.render_block(status)
 
 
 def test_v2_cannot_be_completed_by_an_eval_that_omits_1_1():

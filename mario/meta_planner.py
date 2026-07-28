@@ -1,24 +1,22 @@
-"""Planner-class contrast for the SMB3 (SMA4) option-MDP whistle benchmark.
+"""Constructed planner controls for the SMB3 (SMA4) whistle benchmark.
 
 The option-MDP scaffold (`mario.options`) gives us a resettable search over
 options, including *effect-opaque* options whose payoff must be discovered by
-execution.  The research question is "how little meta-intelligence does
-any%-via-whistle completion require once low-level control is exact?".  To
-answer it honestly we compare *planner classes* on the SAME option library:
+execution. The module compares planners on the same option library:
 
 * a **greedy / myopic** planner that commits to the locally-best progress
   option and (crucially) will not gamble on an option whose effect it cannot
-  predict — i.e. it never explores opaque-effect options.  This is the
-  "no meta-intelligence" baseline.
+  predict—i.e. it never explores opaque-effect options. This is a constructed
+  zero-exploration negative control.
 * the existing **resettable BFS** (`search_options`) and a cost-optimal
   **uniform-cost** search added here, both of which *execute* opaque options
   and learn their effect from the post-state.
 
-The thesis prediction, which the benchmark tests: the greedy planner completes
-the game the long warpless way but never discovers the warp-whistle skip, while
-resettable search discovers the opaque whistle payoff (World 1 -> World 8) and
-returns a far cheaper plan.  The gap between them is the meta-intelligence the
-skip requires.
+The symbolic instance is expected to make greedy miss the warp-whistle skip
+while resettable search executes the opaque option and discovers it. That
+contrast is true by construction and is not evidence of a general planner
+advantage. A scientific comparison needs matched exploratory/effect-cache
+baselines and separate discovery, execution, and retained-route costs.
 
 Option *costs here are symbolic* (planning-layer stand-ins); the option
 endpoints and the whistle spend mechanic are ROM-verified separately (the
@@ -79,8 +77,8 @@ def greedy_plan(library: OptionLibrary, start: MetaState,
     option improves the heuristic, or at ``max_steps``.
 
     Opaque-effect options are invisible to it by default: a planner with no
-    exploration cannot value a payoff it cannot predict.  That is the modelled
-    "no meta-intelligence" baseline, not a bug.
+    exploration cannot value a payoff it cannot predict. This is the modeled
+    zero-exploration control, not a general baseline.
     """
     context = context or OptionContext()
     state = start
@@ -791,11 +789,13 @@ def build_sma4_whistle_rom_library(
 def run_whistle_benchmark(config: WhistleBenchmarkConfig | None = None, *,
                           max_tier: KnowledgeTier = KnowledgeTier.TIER2_BLACK_BOX_OPTION,
                           start: MetaState | None = None) -> dict:
-    """Run greedy / BFS / uniform-cost planners on the whistle library.
+    """Run the constructed greedy / BFS / uniform-cost controls.
 
     Returns a comparison report keyed by planner, plus a `contrast` summary
     that states whether each planner discovered the whistle skip and the cost
-    gap between greedy and the cheapest searcher.
+    gap between greedy and the cheapest searcher. Greedy excludes opaque
+    options and lateral moves by construction, so this report alone is not a
+    matched planner-advantage experiment.
     """
     cfg = config or WhistleBenchmarkConfig()
     start = start or MetaState(world=1, node=(0, 0))

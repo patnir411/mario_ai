@@ -393,7 +393,8 @@ Not established:
 Actions:
 
 1. run focused pointer/option/planner tests;
-2. run all ROM-backed SMA4 adapter/acquisition tests;
+2. run the five ROM-gated SMA4 adapter tests plus the two non-ROM acquisition
+   manifest/schema tests;
 3. run `scripts/verify_iteration.py`;
 4. replay the 30/32 stock solution gate;
 5. compile every changed Python file and run `git diff --check`;

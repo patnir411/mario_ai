@@ -14,7 +14,10 @@ This document is the map. Each module below doubles as a learning unit: it state
 
 Date: 2026-06-03.
 Updated: 2026-07-27 after physical-representative search, finite option
-refinement, and the live SMA4 cursor-pointer correction.
+refinement, the live SMA4 cursor-pointer correction, and a first-principles
+search/abstraction reassessment. The detailed mathematical claim boundary and
+Gate 0–5 program live in
+`notes/sessions/2026-07-27-foundations-reassessment-and-research-program.md`.
 
 ---
 
@@ -71,6 +74,15 @@ NES / GB / GBA emulator
 - This is still a segmented result, not a continuous route or a speedup:
   independent power-state roots, inventory/leaf writes, and a symbolic Bowser
   edge remain, while greedy is intentionally nonexploring and finds no goal.
+- The 11 refined blocks are stable only within the encountered finite table.
+  Refinement starts from exact `MetaState` colors and only splits, so the result
+  is not claimed to be the coarsest option-induced quotient.
+- The first search-semantics audit fixes are in place: only retained frontiers
+  consume novelty, action-vocabulary permutations are regression-tested, and
+  sustained pipe macros count their actual chunk calls and scheduled
+  chunk-frame path cost. Exact primitive-frame work remains uninstrumented when
+  `run_chunk` terminates early. Learned beam guidance still adds an edge prior
+  rather than cumulative path probability.
 
 ---
 
@@ -359,7 +371,9 @@ Policy/value guidance is implemented, but the evidence is deliberately narrow:
 
 - On SMB1 1-1 at width 6/top-3, one local entity-policy prior reduced expansions from 7005 to 2770
   while both configurations solved. That is a **single-level search-guidance observation**, not an
-  AlphaZero result and not evidence of a universal 2.53 plain/guided ratio.
+  AlphaZero/Levin/PHS result and not evidence of a universal 2.53
+  plain/guided ratio. The implementation adds the current edge's log prior to a
+  fresh state score; it does not accumulate path log probability.
 - Hard top-k pruning is incomplete: the same weak prior can discard the successful action at a
   tighter top-k. Prefer soft priors, a uniform fallback, entropy-adaptive mixing, or
   completeness-safe policy-guided heuristic search.
@@ -424,11 +438,22 @@ pairs share finite refined blocks.
 Refinement currently reports classes; it does **not** merge the live frontier.
 Completeness and closure mean only the encountered records, finite option
 implementation, ROM/core, tier, and depth. They are not global bisimulation or
-determinism proofs. Until the live unpowered entry receives legitimate power
+determinism proofs. The initial coloring includes exact `MetaState`, so
+different symbolic states cannot merge even when the finite option alphabet
+does not distinguish them; the 11 classes are not a coarsest quotient. Until
+the live unpowered entry receives legitimate power
 and both acquisitions share one uninterrupted lineage, call this a
 **segmented option-planning prototype**. Report retained ROM frames,
 rolled-back evaluation work, symbolic endpoint costs, attempted versus
 selected interventions, and physical versus symbolic path evidence separately.
+
+The research schema must keep five objects distinct: complete physical state
+`x`, task abstraction `z`, lineage `h`, epistemic option-effect knowledge `e`,
+and intervention ledger `i`. Route cost is retained controller time; search
+cost is the vector of evaluated primitive frames, option calls, wall time, and
+memory. One-root, no-write, no-symbolic-edge, physical-terminal, and independent
+replay requirements are feasibility constraints, not costs that can be traded
+away.
 
 ---
 
@@ -478,19 +503,26 @@ The original V0–V5 sequence is preserved as project history:
 | **V4** | Solve the full any% route | mechanic-aware routing and replay composition |
 | **V5/V6** | Test generalist control and learned guidance | useful standalone negatives; local 1-1 prior win |
 
-Current evidence gates, in order:
+Current evidence dependencies:
 
-1. Close the live-cursor correction with clean-source normal/reverse Tier-2
-   reports, full tests, and replay gates.
-2. Supply power legitimately from one live World-1 lineage; remove the second
+1. Preserve the passed Gate-0A evidence semantics: retained-only novelty,
+   separate loop evidence, synthetic macro accounting, provenance fields, and
+   precise coverage labels.
+2. In parallel, finish Gate 0B—exact primitive-work counters, search/conformance
+   separation, and cumulative full-support policy guidance—before any
+   search/planner performance claim.
+3. Immediately supply power legitimately from one live World-1 lineage; remove the second
    acquisition root, inventory merge, and fortress leaf rehold.
-3. Construct and independently replay one continuous, write-free physical
+4. Construct and independently replay one continuous, write-free physical
    two-whistle lineage.
-4. Replace symbolic SMA4 World-8/Bowser endpoints.
-5. Add matched unknown-effect/effect-cache
-   baselines under a vector cost contract.
-6. Re-solve 6-3; instrument moving-platform phase and variable action durations for 6-2.
-7. Test learned priors across levels without reducing solve rate.
+5. Replace symbolic SMA4 World-8/Bowser endpoints.
+6. Build a held-out legal-history/suffix corpus and compare reachability,
+   exact-cost, and intervention quotients against exact physical execution;
+   claim exhaustive physical-record search only on a declared finite domain.
+7. Benchmark Go-Explore, IW/BFWS, restarting walks, full-support Levin/PHS, and
+   variable durations on fixed roots and matched primitive-frame budgets.
+8. Only then add matched unknown-effect/effect-cache baselines, failed-tree
+   subgoal learning, multi-level learned priors, and cross-game transfer.
 
 ---
 
@@ -526,12 +558,23 @@ Current evidence gates, in order:
   the architecture currently implemented here.
 - Orseau and Lelis, *Policy-guided Heuristic Search with Guarantees* (AAAI 2021) — a direct
   candidate for safe learned guidance.
-- Chatterjee and Khardon, *Planning with Variable-duration Actions* (NeurIPS 2025) — relevant to
-  moving platforms and P-speed.
+- Chatterjee and Khardon, *Improving Planning and MBRL with Temporally-Extended
+  Actions* (NeurIPS 2025) — relevant to moving platforms and P-speed.
+- Sutton, Precup, Singh, *Between MDPs and Semi-MDPs* (AIJ 1999), and
+  Ravindran/Barto, *SMDP Homomorphisms* (IJCAI 2003) — exact option and
+  abstraction boundaries.
+- Abel et al., *Value Preserving State-Action Abstractions* (AISTATS 2020) —
+  judge the abstraction jointly with the policies its option set can express.
+- Littman, Sutton, Singh, *Predictive Representations of State* (2001), and
+  Clarke et al., *CEGAR* (2000) — controlled suffix tests and
+  counterexample-guided refinement.
+- Vaandrager/Melse (CONCUR 2025), Giraud et al. *L-SCALE* (AST 2026), and
+  Turkenburg et al. (CSL 2026) — scoped finite conformance suites, snapshot-
+  guided active testing, and quantitative behavioral witnesses.
 - Guez, Silver, and Dayan, *BAMCP* (NeurIPS 2012) — belief/history baseline for unknown options.
-- Ravindran and Barto, *SMDP Homomorphisms* (IJCAI 2003), and Castro and Precup,
-  *Using Bisimulation for Policy Transfer in MDPs* (AAAI 2010) — direct mathematics for testing
-  whether physical states may safely share an option-level abstraction.
+- Castro and Precup, *Using Bisimulation for Policy Transfer in MDPs* (AAAI
+  2010) — direct mathematics for testing whether physical states may safely
+  share an option-level abstraction.
 - Givan, Dean, and Greig, *Equivalence Notions and Model Minimization in MDPs*
   (AIJ 2003), and Castro, Panangaden, and Precup, *Equivalence Relations in
   Fully and Partially Observable MDPs* (IJCAI 2009) — recursive

@@ -50,12 +50,15 @@ remains the solver:
 - `beam_search` — a width-bounded frontier ranked by a progress/death heuristic. The project uses
   potential-inspired progress features; it does not claim the formal guarantee of
   potential-based reward shaping.
-- `coverage_search` — a **Go-Explore-style** beam/archive hybrid (cell coverage
-  over `(area, x-tile, y-tile)` plus novelty), useful on vertical and deceptive
-  routes where a narrow beam stalls. It is not the full Go-Explore algorithm.
+- `coverage_search` — a **novelty-augmented beam search** (cell coverage over
+  `(area, x-tile, y-tile)` plus a one-time bonus), useful on vertical and
+  deceptive routes where a narrow beam stalls. It is neither full Go-Explore
+  nor Iterated Width; those are separate planned baselines.
 - `search_from_state` — beam from any live state, used for in-run rescue.
-- Optional learned policy/value signals order or softly bias expansions. Hard top-k pruning is
-  experimental because an inaccurate prior can remove the only successful action.
+- Optional learned policy/value signals order or softly bias expansions. The
+  current policy score is edge-guided rather than cumulative path-policy
+  search. Hard top-k pruning is experimental because an inaccurate prior can
+  remove the only successful action.
 
 **Disassembly-grounded routing.** The castle/water levels are gated by exact engine mechanics, so
 they are routed against the SMB 6502 disassembly: `HandlePipeEntry`'s pipe-top metatile predicate,
@@ -70,13 +73,16 @@ acquisition histories, and the adapter follows SMA4's live cursor-object pointer
 fixed RAM pair; this removed the apparent order asymmetry and all cursor repair writes. The route
 is still not one continuous Option-SMDP execution: it composes independent power-state roots, an
 inventory merge, a fortress leaf rehold, and a symbolic Bowser edge. See
-`notes/sessions/2026-07-27-sma4-live-cursor-pointer-tier2.md`.
+`notes/sessions/2026-07-27-sma4-live-cursor-pointer-tier2.md`. The mathematical
+claim boundary and gated research program are in
+`notes/sessions/2026-07-27-foundations-reassessment-and-research-program.md`.
 
 **Verification spine.** `mario.solution_verification` and
 `scripts/verify_stock_solutions.py` replay the canonical stock manifests. Cross-game CLI promotion
 also requires an independent replay before a run may replace a canonical solution. Tests cover
 snapshot determinism, restore integrity, reward/search contracts, adapter behavior, and publishing
-gates.
+gates. The July 27 bounded Gate-0 working-overlay verification is source-bound in
+`notes/artifacts/2026-07-27-foundations-gate0-verification.json`.
 
 ## Learning pipeline
 

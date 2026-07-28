@@ -93,14 +93,21 @@ def _source_control() -> dict:
         path = Path(relative)
         source_hash.update(relative.encode("utf-8"))
         source_hash.update(path.read_bytes())
+    overlay_sha256 = source_hash.hexdigest()
     return {
         "git_commit": subprocess.check_output(
             ["git", "rev-parse", "HEAD"], text=True).strip(),
+        "git_tree": subprocess.check_output(
+            ["git", "rev-parse", "HEAD^{tree}"], text=True).strip(),
         "git_dirty": bool(status.strip()),
         "git_status": status.splitlines(),
         "tracked_diff_sha256": hashlib.sha256(patch).hexdigest(),
         "untracked_source_files": untracked,
-        "working_source_sha256": source_hash.hexdigest(),
+        "working_overlay_sha256": overlay_sha256,
+        "working_overlay_definition": (
+            "sha256(git diff --binary HEAD followed by sorted untracked "
+            "relative paths and contents)"
+        ),
     }
 
 

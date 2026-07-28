@@ -2,6 +2,51 @@
 
 Newest first. Detailed notes live under `notes/sessions/`.
 
+## 2026-07-27 — Foundations reassessment + falsifiable research program
+
+Detailed note:
+`notes/sessions/2026-07-27-foundations-reassessment-and-research-program.md`
+
+Summary:
+- Re-derived the project as deterministic fixed-root shortest-path search over
+  exact emulator/wrapper states, with options valid only when initiation,
+  controller policy, termination, duration, and retained cost compose from the
+  actual predecessor state.
+- Scoped the 13-record/11-block SMA4 result to a stable refinement of the
+  encountered finite option table. It is not a coarsest quotient, global
+  bisimulation, proof that `MetaState` is Markov, or a continuous game route.
+- Separated physical state, task abstraction, lineage, epistemic option
+  knowledge, and intervention provenance; also separated retained route cost
+  from evaluated search/conformance cost.
+- Identified three search-semantics debts: pruned candidates can consume global
+  novelty, the learned beam prior is edge-guided rather than cumulative
+  path-policy search, and sustained pipe macros undercount nodes/frames.
+- Closed the bounded implementation slice: novelty is committed only for
+  retained frontiers, all six action-vocabulary permutations exercise the
+  regression, generated-but-pruned cells remain loop evidence, pipe macros
+  count actual chunk calls plus scheduled chunk-frame path cost, status
+  provenance is labeled at generation time, and the benchmark emitter now
+  distinguishes Git-tree identity from the working overlay. Exact primitive
+  frames remain uninstrumented when a chunk terminates early.
+- Reframed the strongest research thesis as reset-backed,
+  counterexample-guided construction and held-out testing of task-relative
+  option abstractions, with exact physical execution as the validity oracle and
+  exhaustive search claims restricted to declared finite domains.
+- Added a dependency-gated program: preserve passed Gate 0A evidence semantics;
+  complete Gate 0B measurement work in parallel before performance claims;
+  establish one write-free root lineage; replace symbolic World 8/Bowser; build
+  a legal held-out conformance corpus; benchmark
+  IW/BFWS/Go-Explore/Levin/PHS and variable durations; only then resume learning
+  and transfer.
+- Extended the July 25 research map with value-preserving state-action
+  abstraction, predictive state, quantitative bisimulation, CEGAR, modern
+  conformance fault domains, reset-access oracles, and finite behavioral-distance
+  witnesses, without transferring results beyond their stated assumptions.
+- Verification after implementation: 177 passed, zero failed/errors, ten
+  expected skips; the determinism/snapshot gate and 30/32 stock replay gate are
+  green. The tested working-overlay identity is preserved in
+  `notes/artifacts/2026-07-27-foundations-gate0-verification.json`.
+
 ## 2026-07-27 — SMA4 live cursor pointer + Tier-2 correction
 
 Detailed note:
@@ -24,8 +69,9 @@ Summary:
   frames remain a symbolic Bowser edge; greedy remains stuck, so no speedup
   ratio is claimed.
 - Verification: 44 focused pointer/option/planner tests, 171 full-suite tests
-  with ten expected skips, seven ROM-backed SMA4 tests, compilation/diff
-  checks, and the 30/32 stock replay gate pass. Clean-source normal/reverse
+  with ten expected skips, five ROM-gated SMA4 adapter tests plus two non-ROM
+  acquisition manifest/schema tests, compilation/diff checks, and the 30/32
+  stock replay gate pass. Clean-source normal/reverse
   benchmark attestations are the post-commit gate.
 - The route is still segmented: two independent power-state roots, one
   inventory-merge write, one fortress leaf-rehold write, and the symbolic
@@ -61,7 +107,8 @@ Summary:
   minimization, skill-driven abstractions, active automata learning,
   predictive-state tests, PUMA, and the July 20 L-SCALE emulator/snapshot work.
 - Verification: 41 focused; 163 full-suite passed with ten expected skips;
-  seven ROM-backed SMA4 tests passed; stock replay remains 30/32. Final
+  five ROM-gated SMA4 adapter tests plus two non-ROM acquisition
+  manifest/schema tests passed; stock replay remains 30/32. Final
   normal/reversed Tier-3 and Tier-2 report gates are specified in the detailed
   note.
 - Next: diff the two second-whistle lineages, generate an input-only
@@ -91,8 +138,9 @@ Summary:
 - The hand-seeded skip remains 8,966 vs 69,000 frames only at effective Tier 3
   and still ends at symbolic Bowser; max Tier 1 correctly rejects its cursor
   repair.
-- Verification: 27 focused, 149 full-suite (10 skipped), seven ROM-backed SMA4
-  tests, and the 30/32 stock replay gate all pass.
+- Verification: 27 focused, 149 full-suite (10 skipped), five ROM-gated SMA4
+  adapter tests plus two non-ROM acquisition manifest/schema tests, and the
+  30/32 stock replay gate all pass.
 - Next: preserve multiple physical representatives, partition-refine by
   deterministic option signatures, then supply fortress power legitimately
   from the live lineage.

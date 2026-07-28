@@ -7,8 +7,9 @@ This file consolidates the literature and tool references that informed the V4-V
 generalist-policy reassessment, the "net serves search" pivot, the small-LLM/VLM discussion, and
 the cross-game Mario adapter work. The July 25 refresh prioritizes methods that
 map to falsifiable experiments in this repository rather than architecture
-fashion: completeness-safe policy-guided search, unknown-option planning,
-variable-duration actions, selective policy handoff, and reliable evaluation.
+fashion: exact option composition, predictive/conformance-tested abstraction,
+completeness-safe policy-guided search, unknown-option planning,
+variable-duration actions, reset-access accounting, and reliable evaluation.
 
 **First-principles synthesis (2026-07-15):** `notes/theory/first-principles.md`
 (corpus fetch: `notes/theory/README.md`).
@@ -85,6 +86,12 @@ variable-duration actions, selective policy handoff, and reliable evaluation.
      physical lineage with legitimate power/inventory: remove the independent
      acquisition roots, inventory merge, and fortress leaf rehold before replacing
      the symbolic World-8/Bowser endpoint.
+   - The stronger research direction is not a larger option planner. It is
+     counterexample-guided construction and held-out testing of objective-
+     relative option abstractions, with exact physical execution retained as
+     the validity oracle and exhaustive physical-record search claimed only on
+     a declared finite domain. The current 11 blocks refine an initial
+     exact-`MetaState` coloring and are not claimed to be a coarsest quotient.
 
 ## References
 
@@ -201,6 +208,28 @@ Bellman 1957 digest: `notes/theory/bellman-1957.md`.
   - Related overview: https://www.ijcai.org/proceedings/2021/0702.pdf
   - Repo relevance: conceptual basis for novelty/cell archive search.
 
+- Nir Lipovetzky, "Width-Based Algorithms for Common Problems in Control,
+  Planning and Reinforcement Learning", IJCAI 2021.
+  - Official proceedings: https://www.ijcai.org/proceedings/2021/702
+  - Repo relevance: defines novelty through first-seen feature tuples and
+    planning width. The current cell-count bonuses are not IW; implement and
+    name IW(1)/IW(2) separately, with a frozen feature vocabulary.
+
+- Nir Lipovetzky, Hector Geffner, "Best-First Width Search: Exploration and
+  Exploitation in Classical Planning", AAAI 2017.
+  - Official proceedings:
+    https://ojs.aaai.org/index.php/AAAI/article/view/11027
+  - Repo relevance: matched goal-directed plus structural-novelty baseline for
+    Mario plateaus after novelty bookkeeping is made search-order explicit.
+
+- Laurent Orseau, Levi H. S. Lelis, Tor Lattimore, Théophane Weber,
+  "Single-Agent Policy Tree Search With Guarantees", NeurIPS 2018.
+  - Official proceedings:
+    https://papers.nips.cc/paper_files/paper/2018/hash/52c5189391854c93e8a0e1326e56c14f-Abstract.html
+  - Repo relevance: maintain cumulative path probability and full action
+    support, then use Levin-style enumeration. This is the principled
+    alternative to hard top-\(k\), edge-only policy bonuses.
+
 - Clara Meister, Tim Vieira, Ryan Cotterell, "Best-First Beam Search", TACL 2020.
   - arXiv: https://arxiv.org/abs/2007.03909
   - ACL Anthology: https://aclanthology.org/2020.tacl-1.51/
@@ -281,6 +310,16 @@ Ranked by direct value to the current codebase:
      trajectory.
 
 Secondary, conditional leads:
+
+- Daniel Platnick, Dawson Tomasz, Eamon Earl, Sourena Khanzadeh, Richard
+  Valenzano, "Breadth-First Search vs. Restarting Random Walks for Escaping
+  Uninformed Heuristic Regions", AAAI 2026.
+  - Official proceedings:
+    https://ojs.aaai.org/index.php/AAAI/article/view/41044
+  - Repo experiment: compare bounded BFS with restarting walks from exact
+    stalled snapshots on Mario progress plateaus. Snapshot restoration makes
+    this unusually cheap, but it is a portfolio arm after correct
+    IW/BFWS/Levin/PHS baselines, not a replacement for them.
 
 - Dan Haramati et al., "Hierarchical Entity-centric Reinforcement Learning with
   Factored Subgoal Diffusion" (ICLR 2026).
@@ -555,6 +594,88 @@ Secondary, conditional leads:
 
 ### State abstraction at option boundaries (July 25 literature cutoff; July 26–27 implementation)
 
+- David Abel, Nate Umbanhowar, Khimya Khetarpal, Dilip Arumugam, Doina
+  Precup, Michael Littman, "Value Preserving State-Action Abstractions",
+  AISTATS 2020.
+  - PMLR: https://proceedings.mlr.press/v108/abel20a.html
+  - Repo experiment: judge an abstraction jointly with the options it leaves
+    representable. A global near-optimality claim is premature while legitimate
+    power acquisition and a physical World-8 suffix are absent; keep primitive
+    actions available in completeness-sensitive experiments.
+
+- Michael L. Littman, Richard S. Sutton, Satinder Singh, "Predictive
+  Representations of State", NeurIPS 2001.
+  - Official proceedings:
+    https://proceedings.neurips.cc/paper_files/paper/2001/hash/1e4d36177d71bbb3558e43af9577d70e-Abstract.html
+  - Repo experiment: build a history-by-controlled-suffix table of option and
+    primitive tests. Add history features only when they change a future-test
+    prediction, and reserve suffix columns before choosing a compact basis.
+
+- Norm Ferns, Prakash Panangaden, Doina Precup, "Metrics for Finite Markov
+  Decision Processes", AAAI 2004.
+  - Official proceedings:
+    https://s.aaai.org/Library/AAAI/2004/aaai04-124.php
+  - Repo experiment: attach a quantitative behavioral distance to candidate
+    approximate merges only after declaring reward/cost, discount or
+    finite-horizon/proper-SSP assumptions. Discounted value bounds do not
+    automatically apply to undiscounted frame minimization.
+
+- Cameron Allen, Neev Parikh, Omer Gottesman, George Konidaris, "Learning
+  Markov State Abstractions for Deep Reinforcement Learning", NeurIPS 2021.
+  - Official proceedings:
+    https://papers.nips.cc/paper/2021/hash/454cecc4829279e64d624cd8a8c9ddf1-Abstract.html
+  - Repo experiment: test whether the concrete-state belief within an abstract
+    state is history-independent. Inverse-dynamics prediction alone cannot
+    authorize a merge.
+
+- Edmund Clarke, Orna Grumberg, Somesh Jha, Yuan Lu, Helmut Veith,
+  "Counterexample-Guided Abstraction Refinement", CAV 2000.
+  - Author-posted paper:
+    https://web.stanford.edu/class/cs357/cegar.pdf
+  - Repo experiment: begin with a deliberately small task abstraction, validate
+    a proposed route against exact physical execution, and use every spurious
+    abstract route or held-out mismatch to split the model.
+
+- Frits Vaandrager, Ivo Melse, "New Fault Domains for Conformance Testing of
+  Finite State Machines", CONCUR 2025.
+  - Open proceedings:
+    https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.CONCUR.2025.34
+  - Repo experiment: state the assumed fault domain and suffix-depth/state-cover
+    conditions for a finite option-boundary test suite. Four NOOP frames are a
+    useful falsifier, not an unqualified equivalence certificate.
+
+- Ruben Turkenburg, Harsh Beohar, Franck van Breugel, Clemens Kupke, Jurriaan
+  Rot, "Constructing Witnesses for Lower Bounds on Behavioural Distances",
+  CSL 2026.
+  - Open proceedings:
+    https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.CSL.2026.25
+  - Repo experiment: accompany each refinement split with a finite suffix and
+    quantitative lower bound. The paper treats labelled Markov chains; adapting
+    its certificates to controlled, costed SMDPs is a research problem rather
+    than a theorem transfer.
+
+- Paul K. Rubenstein et al., "Causal Consistency of Structural Equation
+  Models", UAI 2017.
+  - Institutional record:
+    https://is.mpg.de/publications/rubensteinetal17
+  - Repo experiment: declare the allowed low-level interventions and require
+    the low/high execution diagram to commute. This is the foundation beneath
+    treating two cursor-object bases as realizations of one logical cursor.
+
+- Sander Beckers, Frederick Eberhardt, Joseph Y. Halpern, "Approximate Causal
+  Abstractions", UAI 2020.
+  - PMLR: https://proceedings.mlr.press/v115/beckers20a.html
+  - Repo experiment: if causal abstraction becomes approximate, report the
+    discrepancy metric and intervention scope explicitly; do not conflate
+    intervention agreement with controller reachability.
+
+- Dhruv Rohatgi, Dylan J. Foster, "Necessary and Sufficient Oracles: Toward a
+  Computational Taxonomy for Reinforcement Learning", COLT 2025.
+  - PMLR: https://proceedings.mlr.press/v291/rohatgi25b.html
+  - Repo relevance: reinforces that reset access changes computational
+    capability. Reports should distinguish search-oracle restores,
+    controller-plan inputs, and testing-oracle rollbacks.
+
 - George Konidaris, Leslie Pack Kaelbling, Tomás Lozano-Pérez, "From Skills to
   Symbols: Learning Symbolic Representations for Abstract High-Level Planning",
   *Journal of Artificial Intelligence Research* 61, 2018.
@@ -649,7 +770,7 @@ Secondary, conditional leads:
   *SIAM Journal on Computing* 16(6), 1987.
   - Publisher/DOI: https://epubs.siam.org/doi/abs/10.1137/0216062
   - Repo experiment: retain the current transparent fixed-point pass for the
-    12-record graph; move to a worklist/incremental coarsest-partition algorithm
+    13-record graph; move to a worklist/incremental coarsest-partition algorithm
     only when measured graph size makes it necessary.
 
 - Dana Angluin, "Learning Regular Sets from Queries and Counterexamples",
@@ -665,9 +786,9 @@ Secondary, conditional leads:
   - Open proceedings/DOI:
     https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.CONCUR.2021.32
   - Repo experiment: attach a compact distinguishing option suffix to every
-    refinement split. The current report already returns
-    `use_whistle_again` and `select_world8_pipe` witnesses for the two
-    acquisition-order alias pairs.
+    refinement split. The current final reports return
+    `use_whistle_again` for the cost-distinct post-first-whistle pair;
+    pointer-corrected post-second-whistle records now merge.
 
 - Michael R. James, Satinder Singh, "Learning and Discovery of Predictive State
   Representations in Dynamical Systems with Reset", ICML 2004.
@@ -683,11 +804,13 @@ Secondary, conditional leads:
   - Institutional record:
     https://publikationen.bibliothek.kit.edu/1000195438
   - DOI: https://doi.org/10.1145/3793654.3793755
-  - Availability: published online 2026-07-20, inside the July 25 cutoff.
-  - Repo experiment: borrow snapshot-backed active suffix testing and an
-    inspectable learned automaton. Do not use TLSH/locality-sensitive similarity
-    as authority to merge physical game states; threshold-sensitive approximate
-    hashes may prioritize tests but a false merge can fabricate a route.
+  - Availability: proceedings publication 2026-04-13; KIT repository record
+    posted 2026-07-20, inside the July 25 cutoff.
+  - Repo experiment: borrow snapshot-backed efficient active testing, internal
+    coverage as the observation/equivalence signal, and an inspectable learned
+    automaton. Do not use TLSH/locality-sensitive similarity as authority to
+    merge physical game states; a threshold-sensitive false merge can fabricate
+    a route.
 
 - Francesco Percassi, Alessandro Saetti, Enrico Scala, "Planning with Uncertain
   Action Models", AAAI 2026.
@@ -761,20 +884,24 @@ Secondary, conditional leads:
 ## How These References Map to Current Repo Decisions
 
 - `beam_search`, `coverage_search`, and adapter-backed search are the core deliverable.
-  - Backed by Mario AI competition history, Go-Explore, ExIt, AlphaZero, and our local artifacts.
+  - Backed by Mario AI competition history, exact simulator planning, and local
+    replay artifacts. Current `coverage_search` is novelty-augmented beam
+    search, not full Go-Explore or IW; those remain matched baselines.
 
 - `policy_prior` and value guidance should stay optional accelerators.
   - Backed by AlphaZero/ExIt/Gumbel AlphaZero and the local V6 result: policy-guided beam reduced
     1-1 nodes while preserving solve correctness. The replay-backed comparison is
     `notes/artifacts/2026-07-25-policy-guided-1-1.json`. Not yet measured on SMA4.
 
-- The active product thesis is the **Option-SMDP whistle benchmark** (SMA4), not a flat generalist.
-  - Backed by Sutton options, the local planner-class contrast artifacts, and the 2026-07-14 plan.
-  - Current boundary: both acquisition orders now reach responsive World 8 at
+- The active research thesis is **counterexample-guided, provenance-carrying
+  option abstraction under hybrid reset access**, with SMA4 as the case study.
+  - Backed by options/SMDP homomorphisms, predictive state, CEGAR, finite
+    conformance testing, causal abstraction, and reset-access theory.
+  - Current boundary: both acquisition orders reach responsive World 8 at
     maximum Tier 2 with no cursor writes, but they still compose independent
     roots, an inventory merge, a fortress leaf rehold, and a symbolic Bowser
-    edge. The next honest claim requires one continuous write-free physical
-    lineage, not a larger planner.
+    edge. One continuous write-free lineage is the entrance gate; held-out
+    legal-history abstraction tests are the research contribution.
 
 - The generalist controller track is deprioritized.
   - Backed by Procgen/CoinRun, V4-V6 local failures, and the mismatch between robotic manipulation

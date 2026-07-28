@@ -211,10 +211,15 @@ def build_status(
         else copy.deepcopy(baseline.get("tests", {}))
     )
 
+    source_rev = git_rev()
     return {
         "generated_at": utc_now_iso(),
-        "generated_by": "update_status.py v3",
-        "git_rev": git_rev(),
+        "generated_by": "update_status.py v4",
+        # This is the source revision observed before the generated block is
+        # written. A committed generated file cannot name its own eventual
+        # commit, so do not label this as the containing commit.
+        "source_rev_at_generation": source_rev,
+        "git_rev": source_rev,  # compatibility for older status consumers
         "milestones": milestones,
         "current_best": best,
         "bench": _load_bench(),
@@ -281,7 +286,8 @@ def render_block(status: dict) -> str:
               f"Tests: {tests_str}. "
               f"Bench: {b.get('fps','?')} fps, snapshot {b.get('snapshot_roundtrip_us','?')}µs, "
               f"{b.get('nodes_per_s','?')} nodes/s. "
-              f"_(generated {status['generated_at']}, {status['git_rev']})_")
+              f"_(generated {status['generated_at']}; source at generation "
+              f"{status.get('source_rev_at_generation', status['git_rev'])})_")
     return "\n".join(lines) + "\n" + footer
 
 

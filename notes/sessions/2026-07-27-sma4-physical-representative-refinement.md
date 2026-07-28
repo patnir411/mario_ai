@@ -74,8 +74,10 @@ Three independent read-only reviews checked code, report semantics, and
 documentation scope. The final physical-planner review found no remaining
 correctness blocker after the coarse-observable regression was fixed.
 
-The ROM-backed adapter/acquisition gate passes 7/7, and the stock replay gate
-remains 30/32 with 6-2 and 6-3 unsolved/quarantined.
+The grouped SMA4 gate passes 7/7: five adapter tests are ROM-gated and two
+acquisition tests validate committed manifests/schema without executing a ROM.
+The stock replay gate remains 30/32 with 6-2 and 6-3
+unsolved/quarantined.
 
 ### 2.2 Normal-order live Tier-3 candidate
 

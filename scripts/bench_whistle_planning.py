@@ -5,10 +5,11 @@ effect-opaque whistle option library and reports, per planner: whether it
 reached the goal, its plan, hops, symbolic frame cost, branches, option calls,
 injected knowledge facts, and any opaque effects it discovered.
 
-The headline result is the `contrast`: a myopic planner finishes the game the
-long warpless way but never discovers the warp-whistle skip, while resettable
-search discovers the opaque whistle payoff (World 1 -> World 8) and returns a
-much cheaper plan.
+The `contrast` is a constructed zero-exploration control: myopic greedy
+excludes opaque effects and lateral moves, while resettable search executes the
+opaque whistle option. It is useful for checking effect discovery but is not a
+matched planner-advantage result; that requires exploratory/effect-cache
+baselines and separate discovery and route costs.
 
 This is the planning-layer benchmark with *symbolic* option costs; the option
 endpoints and the whistle spend mechanic are ROM-verified separately

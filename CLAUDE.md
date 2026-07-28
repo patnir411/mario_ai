@@ -5,7 +5,10 @@ Read this after `AGENTS.md`. The July 25 audit lives in
 follow-up lives in
 `notes/sessions/2026-07-26-sma4-option-boundary-integrity.md`; the current
 cursor correction, Tier-2 result, and plan live in
-`notes/sessions/2026-07-27-sma4-live-cursor-pointer-tier2.md`.
+`notes/sessions/2026-07-27-sma4-live-cursor-pointer-tier2.md`. The current
+mathematical claim boundary, implementation-semantics audit, and Gate 0–5
+research program live in
+`notes/sessions/2026-07-27-foundations-reassessment-and-research-program.md`.
 Architecture lives in `DESIGN.md`; research sources live in
 `notes/research-bibliography.md`.
 
@@ -50,7 +53,7 @@ Legacy experiment ledger (artifact-derived; this is not the current roadmap):
 | V2 BC clears 1-1 | DONE | completion_rate=1.0 (20260603-203756-v2_eval) |
 | V3 DAgger | DONE | completion_rate=1.0 (20260603-204027-v2_eval) |
 
-Current best: 1-1: beat (fr=52) net=100%; 1-2: net=100%; 1-3: net=0%; 1-4: net=0%; 2-1: net=0%; 4-1: net=0%; 4-2: net=0%; 4-4: net=0%; 8-1: net=0%; 8-2: net=0%; 8-3: net=0%. Tests: full repository suite (determinism/snapshot gate first): 171 passed / 0 failed / 10 skipped; determinism=green. Bench: 1375.7 fps, snapshot 73.076µs, 336.9 nodes/s. _(generated 2026-07-27T22:58:56Z, 426503f-dirty)_
+Current best: 1-1: beat (fr=52) net=100%; 1-2: net=100%; 1-3: net=0%; 1-4: net=0%; 2-1: net=0%; 4-1: net=0%; 4-2: net=0%; 4-4: net=0%; 8-1: net=0%; 8-2: net=0%; 8-3: net=0%. Tests: full repository suite (determinism/snapshot gate first): 177 passed / 0 failed / 10 skipped; determinism=green. Bench: 1375.7 fps, snapshot 73.076µs, 336.9 nodes/s. _(generated 2026-07-28T01:58:00Z; source at generation 43f55b6-dirty)_
 <!-- STATUS:END -->
 
 ## Durable verified facts
@@ -82,7 +85,13 @@ Current best: 1-1: beat (fr=52) net=100%; 1-2: net=100%; 1-3: net=0%; 1-4: net=0
   records remain cost-distinct under `use_whistle_again`.
 - The complete/closed refinement claim is scoped to the encountered records,
   finite option library, tier, depth, ROM, and core. It is not global
-  bisimulation and does not yet merge the live frontier.
+  bisimulation and does not yet merge the live frontier. Because refinement
+  starts from exact `MetaState` colors and only splits, the 11 blocks are not
+  claimed to be the coarsest option-induced quotient.
+- Treat route cost, search/evaluation cost, physical lineage, epistemic option
+  knowledge, and intervention provenance as separate scientific objects.
+  External-root restores and RAM writes are experimental interventions, not
+  controller-realizable option transitions.
 
 ## Active issues
 
@@ -96,6 +105,15 @@ Current best: 1-1: beat (fr=52) net=100%; 1-2: net=100%; 1-3: net=0%; 1-4: net=0
   needs clean separation from rolled-back evaluation probes.
 - Greedy is intentionally nonexploring; a planner advantage requires matched
   exploratory/effect-cache baselines and a declared vector cost.
+- The first search-semantics cleanup is complete: only retained frontiers
+  consume novelty, action-vocabulary permutations are regression-tested, and
+  generated-but-pruned cells remain loop evidence. Pipe macros count their
+  actual chunk calls and scheduled chunk-frame path cost. The source-bound
+  177-pass local overlay attestation is
+  `notes/artifacts/2026-07-27-foundations-gate0-verification.json`.
+  `run_chunk` can terminate early, so exact primitive frames still need
+  instrumentation; learned beam guidance remains edge-only, and search execution
+  still needs separation from conformance repetition.
 
 ## Next action
 
