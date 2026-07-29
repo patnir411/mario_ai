@@ -7,11 +7,24 @@ strongest result is exact forward-model search over emulator snapshots: beam/cov
 mechanic-aware routing, and replay-gated action sequences. Learned policies are being tested as
 search guides rather than assumed to replace the solver. Cross-game work uses emulator adapters,
 and the current Super Mario Advance 4 (SMA4) route work is a segmented option-planning prototype.
+The current research direction is **query-efficient discovery and finite-domain certification of
+phase-aware, weighted option quotients in resettable black-box environments**. That is a proposed
+program, not a result already established by the code. Learner discovery
+queries, hidden benchmark scoring, and certification/conformance work will be
+reported separately.
 
 The evidence standard is deliberately strict: a game result is positive only after independent
-replay reaches the terminal condition. In the **July 25, 2026 audit** (updated July 27), SMB1 stock
+replay reaches the terminal condition. In the **July 28, 2026 reassessment**, SMB1 stock
 coverage is **30/32 replay-verified**. Level 6-2 remains unsolved and 6-3 is quarantined after its
 seed-0 replay failed.
+
+The roadmap now has two branches. The primary portable branch starts with synthetic systems whose
+minimal weighted quotients are known, then tests active counterexamples, matched reset-access/search
+baselines, and an unchanged open second domain. A bounded Mario-integrity branch independently
+attempts one continuous, controller-realizable, write-free SMA4 lineage. Both share an exact
+phase/action/lineage trace contract; neither is allowed to borrow an unrelated physical
+representative. See
+`notes/sessions/2026-07-28-strategic-reassessment-and-option-contract.md`.
 
 ## Highlights
 
@@ -25,6 +38,9 @@ seed-0 replay failed.
   checkpoint and training rows do not yet have clean-clone training provenance.
 - An adapter layer supports NES SMB1, GB Super Mario Land, and GBA SMA4 experiments without
   putting game-specific RAM assumptions in the generic search API.
+- A normative phase-aware `OptionMachine` / `OptionTrace` v3 design now states the next contract
+  and theorem boundary. It is deliberately **not implemented** and does not relabel current v2
+  option-observation artifacts.
 
 ## Results
 
@@ -67,15 +83,19 @@ shaping.
 
 **Adapters and options.** `mario.adapters.GameAdapter` isolates emulator-specific state, progress,
 and terminal semantics. The SMA4 lane combines level and overworld adapters with an option library
-and a symbolic meta-planner. Exact boundary hashes and intervention ledgers verify the live
-post-1-2 `DOWN,DOWN,LEFT -> (96,96)` fortress entry. Physical-representative search preserves both
+and a symbolic meta-planner. The current `Option` is a flexible legacy runner rather than a
+phase-aware finite-state controller, and the current v2 option table records boundaries rather than
+retained primitive action/phase traces. The additive v3 target is specified in
+`notes/theory/option-machine-trace-v3.md`. Repeated live actions verify the
+post-1-2 `DOWN,DOWN,LEFT -> (96,96)` fortress entry; boundary hashes and
+intervention ledgers audit its provenance. Physical-representative search preserves both
 acquisition histories, and the adapter follows SMA4's live cursor-object pointer rather than a
 fixed RAM pair; this removed the apparent order asymmetry and all cursor repair writes. The route
 is still not one continuous Option-SMDP execution: it composes independent power-state roots, an
 inventory merge, a fortress leaf rehold, and a symbolic Bowser edge. See
 `notes/sessions/2026-07-27-sma4-live-cursor-pointer-tier2.md`. The mathematical
-claim boundary and gated research program are in
-`notes/sessions/2026-07-27-foundations-reassessment-and-research-program.md`.
+claim boundary and superseding two-branch program are in the July 28 strategic
+reassessment linked above.
 
 **Verification spine.** `mario.solution_verification` and
 `scripts/verify_stock_solutions.py` replay the canonical stock manifests. Cross-game CLI promotion

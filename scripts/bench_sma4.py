@@ -1,7 +1,9 @@
 """SMA4 (Stable-Retro/mGBA) throughput bench on this machine.
 
 Mirrors ``scripts/bench.py`` for nes-py SMB1: step rate, snapshot dump/load,
-and a realistic search-node cost (restore → chunk → snapshot).
+and restore → chunk → snapshot successor throughput. These one-shot local
+diagnostics are not a statistical benchmark or an additive component
+decomposition.
 
 Writes:
   bench/sma4_step_rate.json

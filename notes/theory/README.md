@@ -9,7 +9,8 @@ Legal, author-posted PDFs and drafts for grounding the Mario AI / Option-SMDP st
 
 Extracted text (for offline reading / search) regenerates via the same script into
 `notes/theory/extracted/` (also gitignored). The durable synthesis is
-`notes/theory/first-principles.md`.
+`notes/theory/first-principles.md`. The current normative design target is
+`notes/theory/option-machine-trace-v3.md`; it is explicitly unimplemented.
 
 ## Canonical free textbooks (download these first)
 
@@ -45,6 +46,8 @@ Extracted text (for offline reading / search) regenerates via the same script in
 7. ExIt + AlphaZero (search teaches; net guides)
 8. DAgger bounds (why standalone IL fails at death cliffs)
 9. Go-Explore (when Φ-beam detaches)
+10. Phase-aware option/trace contract (`option-machine-trace-v3.md`) — current
+    finite-domain theorem and implementation boundary
 
 See `first-principles.md` for the engineering synthesis, `bellman-1957.md` for the 1957
 chapter digest, and `gita-and-first-principles.md` for the Bhagavad-Gita reading

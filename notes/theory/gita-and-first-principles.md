@@ -7,6 +7,13 @@
 > Theory spine: `first-principles.md`, `bellman-1957.md`.  
 > Method: full extract → chapter study → self-adversarial / devil’s-advocate passes
 > against *both* Gita↔math analogies *and* the Option-SMDP search thesis.
+>
+> **Historical-priority note (2026-07-28):** the July 15 philosophical and
+> mathematical cautions remain as written. Its AcquireWhistle “next action” and
+> serialized route priority are superseded by
+> `notes/sessions/2026-07-28-strategic-reassessment-and-option-contract.md`.
+> Current work begins with the additive phase-aware contract and synthetic
+> known-quotient tests while SMA4 continues only as a bounded integrity case.
 
 This note has three jobs that must not be collapsed:
 
@@ -338,7 +345,8 @@ not put it in the loss function.
 | `bellman-1957.md` | Root math — unchanged |
 | `first-principles.md` | Engineering spine — add pointer to revised thesis |
 | **This file** | Universal truths + adversarial bridge; research ethos |
-| Experimental next action | Unchanged: second W1 AcquireWhistle; drop re-grant — the “prescribed work” |
+| Historical July 15 action | Second W1 AcquireWhistle; superseded 2026-07-28 |
+| Current action | Freeze v3 and pass synthetic quotient invariance; SMA4 is bounded parallel work |
 
 **One sentence that holds both worlds without lying:**
 

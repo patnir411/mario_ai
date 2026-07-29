@@ -11,6 +11,13 @@
 > §3.6; it did not alter the SMA4 route. The final local working-overlay checks
 > are source-bound in
 > `notes/artifacts/2026-07-27-foundations-gate0-verification.json`.
+>
+> **Supersession note (2026-07-28):** the evidence ledger, mathematical
+> cautions, and completed Gate-0A work remain historical facts. The serialized
+> roadmap and “one-root SMA4 next” priority in §§7–8 are superseded by
+> `notes/sessions/2026-07-28-strategic-reassessment-and-option-contract.md`,
+> which adds explicit controller phase and splits portable science from the
+> bounded SMA4 integrity case.
 
 ## 0. Review question and standard
 

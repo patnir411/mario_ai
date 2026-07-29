@@ -1,8 +1,10 @@
 # Mario AI — Design Document
 
-**Goal:** Build a local, from-scratch research system that solves Mario games with exact emulator
-search, then test where learned guidance and hierarchical planning measurably improve that solver.
-The primary machine is a **MacBook Pro 14" (2023, M2 Pro, 16 GB unified memory)**.
+**Goal:** Build a local, from-scratch exact-execution research system, then test whether
+query-efficient discovery can recover and certify useful phase-aware, weighted option quotients on
+declared finite domains. Exact search remains the solver; Mario is the adversarial case study, not
+the entire claim. The primary machine is a **MacBook Pro 14" (2023, M2 Pro, 16 GB unified
+memory)**.
 
 **Project intent (chosen):** *Learn the whole stack.* The objective is to implement and genuinely
 understand forward-model search, behavior cloning/distillation, DAgger, learned search guidance,
@@ -13,11 +15,12 @@ claim. Breadth and understanding over peak performance.
 This document is the map. Each module below doubles as a learning unit: it states *what* it is, *why* it exists, the *theory* behind it, the *interface*, and the *failure modes* to watch.
 
 Date: 2026-06-03.
-Updated: 2026-07-27 after physical-representative search, finite option
-refinement, the live SMA4 cursor-pointer correction, and a first-principles
-search/abstraction reassessment. The detailed mathematical claim boundary and
-Gate 0–5 program live in
-`notes/sessions/2026-07-27-foundations-reassessment-and-research-program.md`.
+Updated: 2026-07-28 after a strategic reassessment, phase-aware option/trace
+contract, hardware-accounting correction, and split of the portable science
+program from the bounded SMA4 integrity case. The durable contract is
+`notes/theory/option-machine-trace-v3.md`; the decision and experiment program
+are in
+`notes/sessions/2026-07-28-strategic-reassessment-and-option-contract.md`.
 
 ---
 
@@ -29,26 +32,29 @@ no need to approximate known emulator dynamics. Search trajectories can train sm
 the strongest current learning use is to **guide** search while retaining exact expansion and
 replay verification. Non-NES games enter through a shared adapter contract. Longer routes are
 represented as options whose effects are observed by execution, but the current SMA4 system is a
-**segmented option-planning prototype**, not yet one continuous Option-SMDP run.
+**segmented option-planning prototype**, not yet one continuous Option-SMDP run. The next
+representation is an additive phase-aware finite controller plus primitive execution trace; it is
+specified but not implemented. Its purpose is to make phase, retained cost, interventions, and
+physical lineage falsifiable before any live quotient merge.
 
 ```
 NES / GB / GBA emulator
         │
    GameAdapter: reset, snapshot/restore, step, progress, terminal
-        ├──────────────────────────────────────────────────────────┐
-        │                                                          │
-   RAM/tile/entity observation                               MetaState + options
-        │                                                          │
-   chunked action space                                      execute-to-observe
-        │                                                          │
-   beam / coverage search  ◄── optional policy/value prior    option planner
-        │
-   replay-gated solution artifact
-        │
-   self-generated labels → BC / DAgger / input consistency
+        ├──────────────────────────────────────────────────────────────┐
+        │                                                              │
+   RAM/tile/entity observation                                exact physical record
+        │                                                     + lineage + intervention
+   chunked action space                                               │
+        │                                              proposed OptionMachine (phase)
+   beam / coverage / safe policy search                      + OptionTrace (primitives)
+        │                                                              │
+   replay-gated solution artifact                    v2 table / suffix diagnostics
+        │                                                              │
+   self-generated labels → learned proposer/prior    FUTURE: certified finite quotient
 ```
 
-**Evidence snapshot, 2026-07-25:**
+**Evidence snapshot, 2026-07-28:**
 
 - SMB1 any% is 8/8 with `beat_game=True`.
 - SMB1 stock coverage is **30/32 replay-verified**. 6-2 is unsolved; 6-3 is quarantined after a
@@ -59,7 +65,7 @@ NES / GB / GBA emulator
 - The SMA4 whistle/World-8 route is a segmented mixed emulator/symbolic benchmark with declared
   state and inventory interventions. It is not evidence of a continuous full-ROM route.
 
-**Implementation delta, 2026-07-27 (literature cutoff remains July 25):**
+**Implementation delta through 2026-07-27:**
 
 - Opt-in SMA4 BFS/UCS now key search by `(MetaState, physical_record_id)` and
   preserve both whistle-acquisition histories. Strict legacy callers still fail
@@ -83,6 +89,20 @@ NES / GB / GBA emulator
   chunk-frame path cost. Exact primitive-frame work remains uninstrumented when
   `run_chunk` terminates early. Learned beam guidance still adds an edge prior
   rather than cumulative path probability.
+
+**Strategic/contract delta, 2026-07-28 (documentation only):**
+
+- The current `Option` is explicitly classified as a legacy arbitrary runner;
+  it has no finite controller phase or retained primitive action trace.
+- `OptionMachine` / `OptionTrace` v3 is an additive target. Current
+  `mario-ai.option-observation.v2` artifacts retain their existing name and
+  limited boundary-observation meaning.
+- The primary science program begins on synthetic systems with known quotients,
+  then tests active distinguishing queries, matched search/reset ablations, and
+  an unchanged open second domain. One-root SMA4 continuity is a bounded
+  parallel integrity case rather than the project-wide blocker.
+- The theorem claim is restricted to a declared finite closed domain, fixed
+  option alphabet, exact retained weight, and explicit controller phase.
 
 ---
 
@@ -108,10 +128,35 @@ Grounded in the literature so the choices are defensible, not cargo-culted.
 
 ## 2. Hardware reality & the real bottleneck
 
-- **The bottleneck is the emulator search loop on CPU, not the GPU.** Tom7 spent "days of compute" in search. Our tiny nets (100k–2M params) train in *seconds* on the MPS backend.
-- **Leverage = parallelize emulator rollouts across cores** and minimize per-node snapshot calls.
-- **16 GB is plenty** for tiny nets; watch memory only if replay buffers of tile-grids get large.
-- **MPS is beta-but-fine** at this scale. Guardrails: validate one CPU-vs-MPS training run for numerical parity (known silent MPS bugs historically), keep `torch.compile` and `autograd.detect_anomaly` **off**, set `PYTORCH_ENABLE_MPS_FALLBACK=1`.
+The reference 2023 M2 Pro configuration has a 12-core CPU (eight performance,
+four efficiency), 19-core GPU, 16 GB unified memory, and 200 GB/s memory
+bandwidth. Hardware is supporting infrastructure, not the research claim.
+
+Tracked one-shot local NES diagnostics report 1,375.7 frames/s, a 73.076 µs
+isolated snapshot dump/load roundtrip, and 2,968.65 µs per
+restore → four steps → child snapshot (336.9 successors/s). The isolated
+snapshot fraction is only 2.46%; even removing it entirely has an Amdahl ceiling
+of about 1.025x. For this workload, emulator stepping and total exact-query
+count dominate. Separately timed SMA4 loops are non-additive and do not identify
+a causal bottleneck.
+
+Near-term systems policy:
+
+- parallelize independent conformance/quotient jobs with one persistent
+  emulator and opaque snapshot store per worker;
+- send compact content-addressed job descriptions and merge results in a
+  deterministic order;
+- select worker count from repeated full-job throughput, coordinator overhead,
+  memory pressure, and thermal state;
+- independently replay promoted traces in a fresh serial process;
+- treat 16 GB as adequate for bounded current work, not as an unlimited
+  snapshot archive; and
+- use CPU as the reference inference path. Select MPS only after parity,
+  measured batch crossover, and end-to-end benefit. No blanket
+  `torch.compile`, MPS, MLX, Core ML, or custom Metal policy is justified.
+
+Snapshot compression, shared-tree concurrency, and custom GPU kernels are
+deferred until same-loop profiling identifies them as material.
 
 ---
 
@@ -161,9 +206,10 @@ uv venv --python 3.13 venv-gba
 uv pip install --python venv-gba/bin/python -e '.[gba,sml,dev]'
 ```
 
-The next throughput work should measure both headless stepping and snapshot round trips on this
-machine, then compare alternative emulator cores under the same state/replay contract. Per-node
-clone cost, not just raw fps, determines search throughput.
+The next throughput artifact should preserve warmups, repeated raw samples,
+hardware/core/ROM/source identity, thermal state, peak memory, exact primitive
+work, and serial versus worker-local full-job scaling. Microbenchmarks are
+diagnostics, not an additive performance decomposition.
 
 ---
 
@@ -398,25 +444,41 @@ shared solver without installing `nes-py`.
 
 At the route layer:
 
-1. `MetaState` compresses world/map position, clears, inventory, and flags.
-2. An `Option` declares an initiation test, executor, termination result, and measured/symbolic
-   cost.
-3. `OptionContext` has two explicit contracts:
+1. A complete physical record binds exact emulator/wrapper state, adapter
+   context, source identity, parent lineage, and intervention evidence.
+   `MetaState` separately annotates world/map position, clears, inventory, and
+   flags; it is neither physical identity nor controller phase.
+2. The current `Option` is a **legacy orchestration wrapper**: it combines a
+   symbolic precondition, arbitrary Python runner, result, estimated/measured
+   cost, and provenance. It does not implement an explicit finite-state
+   controller.
+3. `OptionContext` has two current contracts:
    - strict compatibility mode maps a symbolic state to one snapshot and raises
      `StateAliasError` on a raw-distinct candidate;
    - opt-in multi mode retains immutable in-run physical records, exact-record
      deduplication, all arrivals, observable/context evidence, and explicit
      record restoration.
-4. A symbolic transition deliberately drops physical identity. A later
+4. The proposed additive `OptionMachine`
+   \(\Omega=(id,r,I,Q,q_0,Q_{\mathrm{term}},\pi,\delta,\beta)\) makes finite
+   controller phase explicit. During execution the Markov state is
+   `(physical_state, phase)`. The first serializable profile is a canonically
+   expanded open-loop primitive trace whose phase is the primitive step index.
+5. A proposed `OptionTrace` v3 records every retained primitive
+   `(phase_before, action, phase_after)` transition, exact frames and route
+   weight, entry/exit physical records, lineage, evaluation work, reset access,
+   interventions, and independent replay attestations. It is specified in
+   `notes/theory/option-machine-trace-v3.md` and is **not implemented**.
+6. A symbolic transition deliberately drops physical identity. A later
    physical option fails closed rather than borrowing the first snapshot with a
    matching `MetaState`.
-5. legacy greedy/BFS/UCS remain available; opt-in physical BFS/UCS key frontier
+7. Legacy greedy/BFS/UCS remain available; opt-in physical BFS/UCS key frontier
    and dominance by `(MetaState, physical_record_id)`. Bounded UCS uses
    nondominated `(cost, depth)` labels.
-6. post-run refinement builds a finite option table, repeats enabled
+8. Current post-run refinement builds a v2 finite boundary-observation table, repeats enabled
    transitions, checks normalized behavior plus finite physical-exit evidence,
    propagates successor blocks to a fixed point, and emits content-addressed
-   classes and distinguishing option suffixes.
+   classes and distinguishing option suffixes. It does not contain complete
+   primitive action/phase traces and is not a v3-certified quotient.
 
 The SMA4 implementation has real level/overworld executors and replayable 1-1/1-2 segments.
 One declared 1-2 root now reaches the real unpowered fortress through live
@@ -454,6 +516,22 @@ cost is the vector of evaluated primitive frames, option calls, wall time, and
 memory. One-root, no-write, no-symbolic-edge, physical-terminal, and independent
 replay requirements are feasibility constraints, not costs that can be traded
 away.
+
+For a future v3 table, let \(D_X\subseteq X\) be the declared finite physical
+boundary domain and let \(B_{\mathrm{failure}}\) be disjoint typed failure
+symbols. The closed carrier is
+\(\widetilde D=D_X\uplus B_{\mathrm{failure}}\); failure symbols are formal
+zero-weight absorbing states, not emulator states. Over that carrier and a
+fixed terminating machine library, block members must agree on task labels,
+enabledness, outcome/termination (including terminal phase only when declared
+as output), exact retained weight under a hashed additive algebra, and
+successor block or typed failure sink. Each machine's phase is internal; the
+ordinary option-boundary domain is physical state, not one global phase space.
+Under fixed deterministic dynamics, that yields a well-defined weighted
+quotient preserving option-word reachability and accumulated weight inside the
+declared carrier. This is not a global ROM, stochastic SMDP, causal abstraction,
+or automatic-discovery theorem. Missing rows, conflicting repeats, unknown
+boundaries, and replay-invalid lifting fail closed.
 
 ---
 
@@ -503,36 +581,86 @@ The original V0–V5 sequence is preserved as project history:
 | **V4** | Solve the full any% route | mechanic-aware routing and replay composition |
 | **V5/V6** | Test generalist control and learned guidance | useful standalone negatives; local 1-1 prior win |
 
-Current evidence dependencies:
+The current program has one shared contract and two parallel branches.
 
-1. Preserve the passed Gate-0A evidence semantics: retained-only novelty,
-   separate loop evidence, synthetic macro accounting, provenance fields, and
-   precise coverage labels.
-2. In parallel, finish Gate 0B—exact primitive-work counters, search/conformance
-   separation, and cumulative full-support policy guidance—before any
-   search/planner performance claim.
-3. Immediately supply power legitimately from one live World-1 lineage; remove the second
-   acquisition root, inventory merge, and fortress leaf rehold.
-4. Construct and independently replay one continuous, write-free physical
-   two-whistle lineage.
-5. Replace symbolic SMA4 World-8/Bowser endpoints.
-6. Build a held-out legal-history/suffix corpus and compare reachability,
-   exact-cost, and intervention quotients against exact physical execution;
-   claim exhaustive physical-record search only on a declared finite domain.
-7. Benchmark Go-Explore, IW/BFWS, restarting walks, full-support Levin/PHS, and
-   variable durations on fixed roots and matched primitive-frame budgets.
-8. Only then add matched unknown-effect/effect-cache baselines, failed-tree
-   subgoal learning, multi-level learned priors, and cross-game transfer.
+### Shared Gate S0 — representation and accounting
+
+1. Preserve passed Gate-0A semantics: retained-only novelty, separate loop
+   evidence, real macro accounting, source-bound provenance, and precise
+   coverage labels.
+2. Add v3 schemas, synthetic adversarial fixtures, and opt-in primitive
+   action/phase tracing without changing legacy v2 artifacts.
+3. Separate retained route cost from discovery, conformance, attestation, wall
+   time, and memory. Label full-snapshot, root-only, and no-arbitrary-reset
+   access.
+4. Require serial, cached, job-reordered, and worker-local results to be
+   identical before accepting parallel evidence.
+
+### Branch A — primary portable science
+
+1. Recover known minimal weighted quotients on blinded generated systems with
+   aliases, delayed effects, noncommutative options, variable cost, and
+   controller phase.
+2. Compare exhaustive, random, and counterexample-guided distinguishing
+   suffixes. Count learner membership, hidden benchmark-oracle, and
+   certification/conformance queries separately.
+3. Run matched BFS/UCS, novelty beam, real Go-Explore, IW/BFWS, restarting
+   walks, full-support Levin/PHS, explicit options, structure-induced
+   rerooting, and a bounded PUCT control.
+4. Repeat under full, root-only, and no-arbitrary-reset access.
+5. Run a pre-outcome license/replay/adapter spike on the predeclared MiniHack
+   and Crafter candidates. Require redistribution and exact-seed replay; choose
+   fewer adapter-specific lines, then lower baseline runtime as tie-breaker.
+   Freeze the winner, tasks, and harness before outcome-bearing evaluation.
+6. Only after those gates let learned/programmatic/foundation models propose
+   predicates, phases, options, or queries; exact execution remains the
+   authority.
+
+Pass criteria:
+
+- zero false merges and zero replay-invalid lifted plans inside a declared exact
+  finite domain;
+- at least 2x query/state compression or 20% end-to-end planning savings;
+- active selection uses at least 2x fewer learner membership queries than
+  exhaustive construction or, over at least 30 blinded paired seeds, at least
+  25% fewer than random with a paired 95% bootstrap interval for the ratio
+  below 1.0; hidden scoring/certification queries are reported separately;
+- no level IDs, absolute-coordinate patches, or manual predicate per
+  counterexample; and
+- learned guidance preserves solve rate and saves at least 20% in both primitive
+  work and wall time, not nodes alone.
+
+### Branch B — bounded SMA4 integrity case
+
+Attempt one earliest World-1 root, legitimate power, two whistle acquisitions,
+zero direct writes, no unrelated restores, a physical World-8/Bowser endpoint,
+and fresh-process primitive replay. Stop after two predeclared
+legitimate-power approaches or 40 recorded ROM-backed process-hours, whichever
+comes first. Success makes SMA4 a strong case study; failure is preserved as a
+negative composition result and does not block Branch A.
+
+The finite refinement algorithm remains supporting infrastructure unless
+automatic query selection, reset ablations, planning savings, or cross-domain
+results establish a nontrivial contribution.
 
 ---
 
 ## 14. Open questions / decisions deferred
 
+- What is the smallest synthetic fault domain that exposes phase erasure,
+  delayed effects, noncommutativity, and representative substitution without
+  encoding the answer in hand-written labels?
+- Which active query rule finds shortest useful distinguishing suffixes with
+  the best exact-interaction complexity?
+- Can controller phase or task predicates be proposed automatically while
+  exact execution remains a fail-closed authority?
+- How much does quotient discovery degrade under root-only and no-arbitrary-
+  reset access?
+- Which legally redistributable second domain can use the frozen adapter,
+  trace, and evaluation contracts without domain-specific repairs?
 - Which platform/enemy phase variables make 6-2 search state sufficiently Markov?
 - Do variable action durations `{1,2,4,8,16}` improve moving-platform search under equal budgets?
 - Can PHS/PHS* or Levin-style guidance retain completeness while capturing the local prior gain?
-- Which distinctions belong in `MetaState`, and which should remain explicit physical/history
-  representatives, so equal abstract states have equal option outcome/cost signatures?
 - Can active counterexample suffixes and held-out tests safely justify any
   online refined-class merge, or should physical identity remain the permanent
   frontier key?
@@ -593,6 +721,27 @@ Current evidence dependencies:
   Wißmann et al., *Explaining Behavioural Inequivalence* (CONCUR 2021), and
   Giraud et al., *L-SCALE* (AST 2026) — active distinguishing suffixes over a
   resettable system; approximate hashing is not a safety gate here.
+- Fortz et al., *A Research Agenda for Active Automata Learning* (STTT 2026) —
+  make the teacher, access, query, fault-domain, and guarantee assumptions
+  explicit.
+- Zhang, Luo, and Baltieri, *Compositional Behavioral Semantics for State
+  Abstraction in Reinforcement Learning* (ICML 2026) — specify which behavior
+  a proposed quotient must preserve.
+- Tuero et al., *Structure-Induced Information for Rerooting Levin Tree Search*
+  (ICML 2026) — matched alternative to reconstructing explicit subgoals.
+- Chang et al., *The Surprising Difficulty of Search in Model-Based
+  Reinforcement Learning* (ICML 2026) — learned-model accuracy alone does not
+  establish search benefit.
+- Nixon, *The Myhill-Nerode Theorem for Bounded Interaction* (2026 preprint) —
+  close formal lead and novelty-collision warning; do not transfer its
+  finite-POMDP claims without a new weighted-option proof.
+- Nayyar and Srivastava, *Autonomous Option Invention for Continual
+  Hierarchical Reinforcement Learning and Planning* (AAAI 2025), and
+  Macfarlane et al., *Gradient-Based Program Synthesis with Neurally Interpreted
+  Languages* (ICLR 2026) — controls for manual versus invented symbolic and
+  programmatic options.
+- Taheri et al., *BarrierBench* (L4DC 2026) — precedent for model proposal plus
+  formal validation, not a direct Mario theorem.
 - Bai, Srivastava, and Russell, *Markovian State and Action Abstractions for MDPs via Hierarchical
   MCTS* (IJCAI 2016) — history/representative planning when abstraction induces non-Markov state.
 - Data Crystal — *Super Mario Bros. RAM map*.

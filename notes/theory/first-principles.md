@@ -2,7 +2,8 @@
 
 > Read after (or with) the free textbooks listed in `notes/theory/README.md`.
 > This note is a **synthesis from those sources**, mapped onto this repo — not a
-> substitute for the books. Last research pass: 2026-07-15.
+> substitute for the books. Last research pass: 2026-07-28. The current
+> phase-aware contract is `option-machine-trace-v3.md`.
 
 **One sentence (engineering).** Under a deterministic, snapshot-resettable emulator
 contract, the reliable closed-loop solver is model-based search over savestates,
@@ -31,7 +32,7 @@ digest: `bellman-1957.md`. **Universal / adversarial bridge (Gita + stack):**
 | 1 | Finite MDP / Bellman eq. | Sutton Ch. 3–4; Puterman Ch. 1–4 | adapter state, actions, terminals |
 | 2 | Planning with known model | Sutton Ch. 8 | `beam_search`, `coverage_search` |
 | 3 | Potential \(\Phi\) | Ng–Harada–Russell ICML'99 | global progress \(\Phi\) |
-| 4 | Options → SMDP | Sutton–Precup–Singh AIJ'99; Sutton §17.2 | `mario/options.py`, meta search |
+| 4 | Options → SMDP | Sutton–Precup–Singh AIJ'99; Sutton §17.2 | proposed `OptionMachine`; current `Option` is a legacy runner |
 | 5 | Approx. value space / Newton | Bertsekas *Lessons from AlphaZero* | policy/value guided beam |
 | 6 | ExIt / AlphaZero loop | Anthony et al.; Silver et al. | `policy_guided_search`, ExIt scripts |
 | 7 | IL bounds | Ross–Gordon–Bagnell DAgger | V3–V6 BC/DAgger ceiling |
@@ -58,9 +59,13 @@ replays from the matching entry snapshot. Re-entry desync is a **state mismatch*
 stochasticity. Snapshots make \(f\) resettable: restore = free teleport for search /
 Go-Explore return.
 
-**Hardware corollary.** Bottleneck is CPU emulator + snapshot, not GPU. Measure with
-`bench/*` and `scripts/bench_sma4.py`; parallelize **across** processes, never inside
-one beam on Stable-Retro’s single-instance emulator.
+**Hardware corollary (corrected 2026-07-28).** The measured NES successor loop
+is CPU/emulator-bound, but snapshot roundtrip is only about 2.46% of its
+four-frame node time; “snapshot dominates” is false for that workload. Measure
+full jobs, primitive work, wall time, memory, and coordinator overhead.
+Worker-local emulator processes are the first parallel hypothesis. Within-tree
+parallelism is deferred until deterministic merge semantics and a measured need
+exist; it is not prohibited as a theorem.
 
 ---
 
@@ -405,11 +410,24 @@ Local PDFs live in `notes/theory/pdfs/` (gitignored). Extracted text in
 
 ## 13. Open theory→code gaps (actionable)
 
-1. Explicit \(\beta\) / initiation sets on SMA4 options (white-block, inventory, flight).
-2. Measured multi-time models \(p_o,r_o\) from ROM (replace symbolic warpless/Bowser).
-3. SMA4 global \(\Phi\) that does not cap at the card.
-4. Optional interruption at meta layer once option-values exist.
-5. Keep climbing the knowledge ladder: AcquireWhistle_1_3 → second W1 whistle → drop
-   Tier-1 re-grants.
+Primary portable program after the July 28 reassessment:
+
+1. Additive phase-aware machine/trace schemas with a normalized result
+   signature and reset-access validation.
+2. Synthetic known-quotient systems that fail on phase erasure,
+   representative substitution, delayed effects, and cost laundering.
+3. Exact primitive route/evaluation counters plus active distinguishing-suffix
+   selection under full, root-only, and no-arbitrary-reset access.
+4. A frozen open second-domain harness after synthetic correctness and matched
+   search baselines pass.
+
+Bounded parallel SMA4 integrity work:
+
+5. Explicit \(\beta\) / initiation sets on SMA4 options (white-block,
+   inventory, flight).
+6. Measured multi-time models \(p_o,r_o\) from ROM, replacing symbolic
+   warpless/Bowser edges.
+7. One legitimate-power, write-free physical lineage or a preserved negative
+   at the declared effort cap.
 
 These are engineering instantiations of the math above — not new paradigms.

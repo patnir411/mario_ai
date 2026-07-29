@@ -11,6 +11,10 @@ hashes remain provenance evidence and exact-duplicate indexes; they are not
 behavioral-equivalence signatures.  The refinement report is consequently a
 finite-library, finite-horizon observational result unless its explicit
 completeness and closure gates are satisfied.
+
+``mario-ai.option-observation.v2`` records boundary behavior, not retained
+primitive actions or finite controller phase. It must not be relabeled as the
+unimplemented ``OptionTrace`` v3 contract.
 """
 from __future__ import annotations
 

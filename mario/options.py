@@ -1,9 +1,13 @@
-"""Option-level meta-MDP scaffolding for hierarchical Mario planning.
+"""Legacy option-level meta-planning scaffolding for hierarchical Mario.
 
-The low-level solver produces verified *options* (clear a level, acquire an
-item, use an item).  This module searches over those options in a small symbolic
-state while still allowing opaque-effect options to be executed against a
-resettable emulator and then classified from the observed post-state.
+The low-level solver produces executable high-level runners (clear a level,
+acquire an item, use an item). This module searches over them in a small
+symbolic state while allowing opaque effects to be executed against a resettable
+emulator and classified from the observed post-state.
+
+These ``Option`` objects are not yet phase-aware finite-state controllers, and
+their ledgers are not primitive ``OptionTrace`` records. The additive v3 target
+is documented in ``notes/theory/option-machine-trace-v3.md``.
 """
 from __future__ import annotations
 
@@ -1742,7 +1746,11 @@ class SMA4WhistleExecutor(_SMA4ProvenanceMixin):
 
 @dataclass
 class Option:
-    """One high-level transition in the benchmark option library."""
+    """One legacy high-level runner in the benchmark option library.
+
+    ``runner`` is arbitrary Python and has no explicit finite controller phase.
+    Do not interpret this dataclass as an implemented v3 ``OptionMachine``.
+    """
 
     id: str
     kind: str

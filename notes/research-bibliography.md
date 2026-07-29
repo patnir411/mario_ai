@@ -1,11 +1,13 @@
 # Research Bibliography and Consolidated Field Notes
 
-Research availability cutoff: **2026-07-25**. Repository verification updated
-2026-07-27 in America/Detroit; no post-cutoff source is used.
+Research availability cutoff: **2026-07-28**. Repository verification and
+strategic reassessment updated 2026-07-28 in America/Detroit. Venue status is
+stated explicitly for 2026 sources; preprints are not treated as settled
+results.
 
 This file consolidates the literature and tool references that informed the V4-V6 direction, the
 generalist-policy reassessment, the "net serves search" pivot, the small-LLM/VLM discussion, and
-the cross-game Mario adapter work. The July 25 refresh prioritizes methods that
+the cross-game Mario adapter work. The July 25–28 refresh prioritizes methods that
 map to falsifiable experiments in this repository rather than architecture
 fashion: exact option composition, predictive/conformance-tested abstraction,
 completeness-safe policy-guided search, unknown-option planning,
@@ -82,16 +84,29 @@ variable-duration actions, reset-access accounting, and reliable evaluation.
      fixed cursor bytes can name an abandoned object after the 1-3 exit. Following
      the live pointer at `0x03007824` makes both histories input-responsive and
      removes all cursor writes. The mixed route now passes at maximum Tier 2.
-   - The immediate gate is no longer a cursor-repair suffix. It is one continuous
-     physical lineage with legitimate power/inventory: remove the independent
-     acquisition roots, inventory merge, and fortress leaf rehold before replacing
-     the symbolic World-8/Bowser endpoint.
+   - One continuous physical lineage with legitimate power/inventory remains
+     the Mario integrity gate: remove the independent acquisition roots,
+     inventory merge, fortress leaf rehold, and symbolic endpoint. As of July
+     28 this is a bounded parallel case study, not the blocker for portable
+     abstraction science.
    - The stronger research direction is not a larger option planner. It is
      counterexample-guided construction and held-out testing of objective-
      relative option abstractions, with exact physical execution retained as
      the validity oracle and exhaustive physical-record search claimed only on
      a declared finite domain. The current 11 blocks refine an initial
      exact-`MetaState` coloring and are not claimed to be a coarsest quotient.
+
+9. Cached execution must become phase-aware before a Markov option claim.
+   - Current `Option` objects are arbitrary orchestration runners and current
+     v2 tables observe only boundaries. They do not record a finite controller
+     phase or every retained primitive transition.
+   - The additive v3 target treats a fixed trace as a finite-state controller
+     whose phase is primitive step index, separates retained route cost from
+     evaluation work, and restricts quotient claims to declared finite closed
+     domains.
+   - Certification is infrastructure. The research contribution must come from
+     automatic predicate/phase discovery, query selection, limited-reset
+     behavior, planning utility, or cross-domain transfer.
 
 ## References
 
@@ -358,6 +373,139 @@ Secondary, conditional leads:
   - Relevance: neuron regeneration / reset-and-distill methods are worth an
     ablation only if the reverse-curriculum RL track is resumed.
 
+### 2026-07-28 phase-aware abstraction, search, and future-agent refresh
+
+These are the highest-value sources added during the July 28 refresh following
+the July 25 audit. Each maps to a specific experiment or a claim-boundary
+warning; several sources themselves predate July 25.
+
+- Sophie Fortz, Fatemeh Ghassemi, Léo Henry, Falk Howar, Thomas Neele,
+  Jurriaan Rot, Marnix Suilen, "A research agenda for active automata
+  learning," STTT, 2026.
+  - Open journal article:
+    https://link.springer.com/article/10.1007/s10009-026-00839-z
+  - Status: **peer-reviewed journal article**, published 2026-02-19.
+  - Repo experiment: freeze teacher/reset access, input/output alphabet, fault
+    domain, noise assumptions, and guarantee; compare exhaustive option tables,
+    random suffixes, and active distinguishing-suffix selection at equal
+    learner-membership budgets while reporting hidden scoring and certification
+    queries separately.
+
+- Yivan Zhang, Ziyan Luo, Manuel Baltieri, "Compositional Behavioral
+  Semantics for State Abstraction in Reinforcement Learning," ICML 2026.
+  - arXiv: https://arxiv.org/abs/2606.25357
+  - Status: **listed for ICML 2026**; public manuscript used here.
+  - Repo experiment: define separate reachability-, cost-, label-, and
+    intervention-preserving abstractions rather than calling one quotient
+    generically "correct." Test where their partitions and lifted plans
+    disagree.
+
+- Jake Tuero, Michael Buro, Laurent Orseau, Levi H. S. Lelis,
+  "Structure-Induced Information for Rerooting Levin Tree Search," ICML 2026.
+  - arXiv: https://arxiv.org/abs/2605.30664
+  - Status: **listed for ICML 2026**; public manuscript used here.
+  - Repo experiment: compare explicit hand-authored option/subgoal planning
+    against clustering, learned-heuristic, and hybrid rerooters. This tests
+    whether temporal decomposition is better expressed as search-effort
+    allocation than as a reconstructed symbolic subgoal graph.
+
+- Wei-Di Chang, Mikael Henaff, Brandon Amos, Gregory Dudek, Scott Fujimoto,
+  "The Surprising Difficulty of Search in Model-Based Reinforcement Learning,"
+  ICML 2026.
+  - arXiv: https://arxiv.org/abs/2601.21306
+  - OpenReview: https://openreview.net/forum?id=gTbSqYqumM
+  - Status: **peer-reviewed / ICML 2026, PMLR 306**.
+  - Repo relevance: accurate learned dynamics alone do not imply that
+    learned-value-guided search helps. If a surrogate or value planner is
+    tested, measure search-induced distribution shift, overestimation, solve
+    preservation, and end-to-end cost. Its continuous-control setting is not
+    the same as exact discrete emulator search.
+
+- Anthony T. Nixon, "The Myhill-Nerode Theorem for Bounded Interaction:
+  Canonical Abstractions via Agent-Bounded Indistinguishability," 2026.
+  - arXiv: https://arxiv.org/abs/2603.21399
+  - Status: **preprint; not treated as peer-reviewed as of 2026-07-28**.
+  - Repo relevance: a fixed finite-controller probe family inducing a canonical
+    quotient is unusually close to the proposed phase-aware program. It is both
+    a formal lead and a novelty-collision warning. Do not transfer its
+    finite-POMDP theorems to costed emulator options without a fresh proof.
+
+- Rashmeet Kaur Nayyar, Siddharth Srivastava, "Autonomous Option Invention for
+  Continual Hierarchical Reinforcement Learning and Planning," AAAI 2025.
+  - Proceedings:
+    https://ojs.aaai.org/index.php/AAAI/article/view/34163
+  - Status: **peer-reviewed**.
+  - Repo experiment: compare manually curated Mario options with automatically
+    invented symbolic options on composability, reuse, and independence across
+    generated tasks and held-out legal histories.
+
+- Matthew V. Macfarlane, Clément Bonnet, Herke van Hoof, Levi H. S. Lelis,
+  "Gradient-Based Program Synthesis with Neurally Interpreted Languages," ICLR
+  2026.
+  - Official ICLR page:
+    https://iclr.cc/virtual/2026/poster/10009887
+  - arXiv: https://arxiv.org/abs/2604.18907
+  - Status: **peer-reviewed / ICLR 2026 poster**.
+  - Repo experiment: compare a learned discrete program vocabulary and
+    test-time program refinement with explicit finite-state `OptionMachine`
+    synthesis, memorized traces, and neural behavior cloning. Exact replay
+    remains the verifier.
+
+- Amirhossein Rajabpour, Kiarash Aghakasiri, Sandra Zilles, Levi H. S. Lelis,
+  "Revisiting OOD Generalization in Programmatic RL," ICML 2026.
+  - ICML listing: https://icml.cc/Downloads/2026
+  - Earlier public submission, "Do Programmatic Policies Really Generalize
+    Better? A Re-Evaluation Study":
+    https://openreview.net/forum?id=e26MPyczN9
+  - Status: **accepted-title listing at ICML 2026**; the linked public
+    submission has an earlier title/version, so do not silently treat it as the
+    camera-ready text.
+  - Repo experiment: match observation sparsity, reward design, policy/search
+    capacity, training compute, and tuning before comparing programmatic
+    `OptionMachine` proposals with neural policies. Program structure is not
+    itself evidence of OOD generalization.
+
+- Ali Taheri, Alireza Taban, Sadegh Soudjani, Ashutosh Trivedi,
+  "BarrierBench: Evaluating Large Language Models for Safety Verification in
+  Dynamical Systems," L4DC 2026.
+  - PMLR: https://proceedings.mlr.press/v331/taheri26a.html
+  - Status: **peer-reviewed / PMLR 331**.
+  - Repo relevance: the model-proposes/formal-solver-verifies pattern is a
+    useful architectural precedent. Models may propose option predicates,
+    phases, or probes; exact finite-domain execution validates them. Barrier
+    certificates themselves are not a theorem for Mario.
+
+Future-agent/backcast evidence:
+
+- ARC Prize Foundation, "ARC-AGI-3: A New Challenge for Frontier Agentic
+  Intelligence," 2026.
+  - arXiv: https://arxiv.org/abs/2603.24621
+  - Status: **benchmark technical report/preprint**. It reports humans at 100%
+    and tested frontier systems below 1% as of March 2026.
+- ARC Prize, "Claude Opus 5 — ARC-AGI Results," 2026.
+  - Official result: https://arcprize.org/results/anthropic-claude-opus-5
+  - Status: **benchmark-owner result**, dated 2026-07-24; reports 30.2% on
+    ARC-AGI-3 at High effort. The rapid change is why present model weakness is
+    not a durable research thesis.
+- Mingyu Ouyang, Siyuan Hu, Kevin Qinghong Lin, Hwee Tou Ng, Mike Zheng Shou,
+  "GameWorld: Towards Standardized and Verifiable Evaluation of Multimodal Game
+  Agents," 2026.
+  - arXiv: https://arxiv.org/abs/2604.07429
+  - Status: **preprint; not treated as peer-reviewed**.
+  - Repo relevance: standardized state-verifiable outcomes and repeated
+    full-benchmark evaluation align with this repository; current multimodal
+    agents still struggle with latency, memory, action validity, and
+    long-horizon control.
+- Sergey Rodionov, "Executable World Models for ARC-AGI-3 in the Era of Coding
+  Agents," 2026.
+  - arXiv: https://arxiv.org/abs/2605.05138
+  - Status: **public arXiv manuscript; accepted at AGI-2026 according to the
+    arXiv comments**. Evidence remains public-game-only and private validation
+    is untested.
+  - Repo experiment: let a coding/model agent propose an executable abstraction
+    or controller, then use exact historical observations and replay to reject
+    it. Do not treat public-set performance as transfer evidence.
+
 ### Generalization and Imitation Learning
 
 - Fanqi Lin et al., "Data Scaling Laws in Imitation Learning for Robotic Manipulation", ICLR 2025.
@@ -504,6 +652,39 @@ Secondary, conditional leads:
   - mGBA FAQ: https://mgba.io/faq.html
   - Repo relevance: current GBA emulator core used through Stable-Retro for SMA4.
 
+Open second-domain candidates (selection remains a predeclared licensing and
+adapter spike, not a current decision):
+
+- Mikayel Samvelyan et al., "MiniHack the Planet: A Sandbox for Open-Ended
+  Reinforcement Learning Research," NeurIPS Datasets and Benchmarks 2021.
+  - Proceedings:
+    https://datasets-benchmarks-proceedings.neurips.cc/paper_files/paper/2021/hash/fa7cdfad1a5aaf8370ebeda47a1ff1c3-Abstract-round1.html
+  - Repo relevance: a configurable open sandbox with richer inventory,
+    exploration, and task composition than the synthetic oracle. Its
+    stochastic/procedural dynamics would require exact-seed and reset contracts,
+    so it is not an automatic fit.
+- Danijar Hafner, "Benchmarking the Spectrum of Agent Capabilities" (Crafter),
+  ICLR 2022.
+  - arXiv: https://arxiv.org/abs/2109.06780
+  - Project/code: https://danijar.com/project/crafter/
+  - Repo relevance: a redistributable open-world, long-horizon candidate with
+    explicit achievements and inventory. Pixel observation and procedural
+    generation make it a stronger transfer test but a larger adapter spike.
+
+Hardware/system primary sources:
+
+- Apple, "MacBook Pro (14-inch, 2023) — Tech Specs."
+  - https://support.apple.com/en-us/111340
+  - Repo relevance: source for the reference M2 Pro configuration: 12 CPU
+    cores (8 performance, 4 efficiency), 19 GPU cores, 16 GB unified memory,
+    and 200 GB/s bandwidth. Hardware specifications do not establish workload
+    scaling.
+- Apple Developer, "Accelerated PyTorch training on Mac."
+  - https://developer.apple.com/metal/pytorch/
+  - Repo relevance: primary MPS capability/status reference. Backend selection
+    remains an empirical batch-crossover and parity question; the page does not
+    justify a blanket MPS performance policy.
+
 ### SMB3 / SMA4 reverse-engineering (ground truth for the two-tier SMB3 agent)
 
 - Southbird's NES SMB3 disassembly (reassembles byte-for-byte).
@@ -572,9 +753,12 @@ Secondary, conditional leads:
 - Richard S. Sutton, Doina Precup, Satinder Singh, "Between MDPs and semi-MDPs: A framework for
   temporal abstraction in reinforcement learning", Artificial Intelligence 1999.
   - PDF: https://people.cs.umass.edu/~barto/courses/cs687/Sutton-Precup-Singh-AIJ99.pdf
-  - Repo relevance: formal backbone for `mario/options.py` — initiation set, intra-option policy,
-    termination; planning over options is SMDP planning. AcquireWhistle must be a real option
-    \(\langle\mathcal{I},\pi,\beta\rangle\), not only a MetaState transform.
+  - Repo relevance: formal backbone for the proposed phase-aware
+    `OptionMachine`—initiation set, intra-option policy, controller memory, and
+    termination. Current arbitrary `Option` runners and cached traces are not
+    automatically classical Markov options. `AcquireWhistle` must execute as a
+    real controller from its actual predecessor, not only transform
+    `MetaState`.
 
 - Thomas G. Dietterich, "Hierarchical Reinforcement Learning with the MAXQ Value Function
   Decomposition", JAIR 2000.
@@ -592,7 +776,7 @@ Secondary, conditional leads:
   - Repo relevance: modern option-learning at scale; contrast — we need verified few options, not
     billions of samples of option discovery.
 
-### State abstraction at option boundaries (July 25 literature cutoff; July 26–27 implementation)
+### State abstraction at option boundaries (July 28 literature cutoff)
 
 - David Abel, Nate Umbanhowar, Khimya Khetarpal, Dilip Arumugam, Doina
   Precup, Michael Littman, "Value Preserving State-Action Abstractions",
@@ -893,15 +1077,22 @@ Secondary, conditional leads:
     1-1 nodes while preserving solve correctness. The replay-backed comparison is
     `notes/artifacts/2026-07-25-policy-guided-1-1.json`. Not yet measured on SMA4.
 
-- The active research thesis is **counterexample-guided, provenance-carrying
-  option abstraction under hybrid reset access**, with SMA4 as the case study.
-  - Backed by options/SMDP homomorphisms, predictive state, CEGAR, finite
-    conformance testing, causal abstraction, and reset-access theory.
+- The active research thesis is **query-efficient discovery and finite-domain
+  certification of phase-aware, weighted option quotients in resettable
+  black-box environments**.
+  - Backed by options/SMDP homomorphisms, predictive state, active automata
+    learning, CEGAR, finite conformance testing, behavioral semantics, and
+    reset-access theory.
+  - The proposed v3 contract makes controller phase, primitive execution,
+    retained weight, intervention provenance, and actual lineage explicit.
+    It remains unimplemented; current v2 tables are finite boundary diagnostics.
   - Current boundary: both acquisition orders reach responsive World 8 at
     maximum Tier 2 with no cursor writes, but they still compose independent
     roots, an inventory merge, a fortress leaf rehold, and a symbolic Bowser
-    edge. One continuous write-free lineage is the entrance gate; held-out
-    legal-history abstraction tests are the research contribution.
+    edge. One continuous write-free lineage is a bounded Mario integrity case.
+    Synthetic ground truth, automatic distinguishing queries, reset ablations,
+    planning utility, and an unchanged open second domain gate the portable
+    contribution.
 
 - The generalist controller track is deprioritized.
   - Backed by Procgen/CoinRun, V4-V6 local failures, and the mismatch between robotic manipulation

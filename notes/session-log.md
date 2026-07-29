@@ -2,6 +2,45 @@
 
 Newest first. Detailed notes live under `notes/sessions/`.
 
+## 2026-07-28 — Strategic reassessment + phase-aware option contract
+
+Detailed note:
+`notes/sessions/2026-07-28-strategic-reassessment-and-option-contract.md`
+
+Summary:
+- Narrowed the proposed scientific identity to query-efficient discovery and
+  finite-domain certification of phase-aware, weighted option quotients in
+  resettable black-box environments. Exact search remains the solver; Mario is
+  the adversarial case study.
+- Documented additive `OptionMachine` / `OptionTrace` v3 semantics. Current
+  `Option` runners and `mario-ai.option-observation.v2` artifacts have no
+  explicit finite controller phase or retained primitive trace and were not
+  relabeled.
+- Typed ordinary boundaries as physical \(D_X\subseteq X\), with each
+  machine's phase internal to its own \(Q_o\) and typed failure symbols in a
+  disjoint formal carrier; also froze separate controller/artifact/result
+  identities, reset-compatible setup, evidence modes, and an explicit
+  route-weight algebra.
+- Separated learner membership, hidden benchmark-oracle, and exact
+  certification/conformance queries. Query-efficient discovery is not itself a
+  certificate for unqueried behavior.
+- Split the roadmap into a portable science branch—synthetic ground truth,
+  active counterexamples, matched search/reset ablations, and an open second
+  domain—and a bounded SMA4 physical-lineage branch.
+- Restricted the theorem to a declared finite closed domain and fixed machine
+  library. Exact resets provide membership-style experiments, not a global
+  equivalence oracle; representative substitution remains invalid.
+- Corrected the M2 diagnosis: the tracked NES snapshot roundtrip is about 2.46%
+  of the four-frame successor loop, so eliminating it has only about a 1.025x
+  Amdahl ceiling. End-to-end stepping/query count is the current measured
+  target; worker-local scaling remains to be preserved and verified.
+- Added explicit go/no-go criteria, a July 28 research map, and a speculative
+  2036 backcast. Direct game completion is expected to commoditize faster than
+  replay provenance, distinguishing suffixes, query-complexity results, and
+  exact lifting certificates.
+- This was a documentation/research-contract pass. It changed no route, schema
+  producer, planner behavior, or flagship result.
+
 ## 2026-07-27 — Foundations reassessment + falsifiable research program
 
 Detailed note:

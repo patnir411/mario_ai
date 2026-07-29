@@ -1,10 +1,9 @@
-"""Microbenchmark the two costs that bound beam-search throughput on this machine:
-  1. headless env.step rate (frames/sec)
-  2. dump_state/load_state round-trip cost (the per-node clone cost)
+"""Microbenchmark headless stepping, isolated snapshot dump/load, and
+restore -> chunk -> snapshot successor throughput.
 
-Writes bench/step_rate.json and bench/snapshot_cost.json. Per the plan, per-node clone
-cost (not raw fps) usually dominates, so we also report an estimated nodes/sec for a
-realistic search node = (snapshot + run a 4-frame chunk + restore).
+Writes bench/step_rate.json and bench/snapshot_cost.json. These one-shot local
+diagnostics are not a statistical benchmark or an additive component
+decomposition.
 
     ./venv/bin/python scripts/bench.py
 """
